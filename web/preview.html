@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <title>EF Target Vorschau</title>
+    <!-- Local copy of kit.css from ef_lib, nui:// does not resolve in a normal browser -->
+    <link rel="stylesheet" href="/dev/kit.css" />
+    <style>
+      body.light { background: linear-gradient(#e9eef2, #f7f7f4); }
+      body.dark { background: linear-gradient(#1b2330, #3a2f2a); }
+      #bar { position: fixed; left: 0; bottom: 0; right: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; background: #fff; font: 12px sans-serif; }
+      #bar button { padding: 5px 9px; }
+    </style>
+  </head>
+  <body class="dark">
+    <div id="app"></div>
+    <div id="bar"></div>
+    <script>
+      // Stub for the FiveM global the real NUI would call
+      window.GetParentResourceName = function () { return 'ef_target' }
+      var rows = {
+        two: [
+          { id: 'a', label: 'Tür öffnen', icon: 'fa-solid fa-door-open' },
+          { id: 'b', label: 'Abschließen', icon: 'fa-solid fa-lock', iconColor: '#f87171' }
+        ],
+        divider: [
+          { id: 'a', label: 'Ansprechen', icon: 'fa-solid fa-hand' },
+          { id: 'b', label: 'Untersuchen', icon: 'fa-solid fa-stethoscope' },
+          { id: 'c', label: 'Zurück', icon: 'fa-solid fa-circle-chevron-left', divider: true }
+        ],
+        many: Array.from({ length: 30 }, function (_, i) {
+          return { id: 'r' + i, label: 'Option ' + (i + 1), icon: 'fa-solid fa-gear' }
+        }),
+        long: [
+          { id: 'a', label: 'Ein sehr langer Optionstext, der weit über die feste Panelbreite von zweihundertvierzig Pixeln hinausgeht', icon: 'fa-solid fa-truck-medical' },
+          { id: 'b', label: 'Kurz', icon: 'fa-solid fa-bolt' }
+        ]
+      }
+      function send(m) { window.postMessage(m, '*') }
+      var index = 0
+      var cur = 'two'
+      function show(name, title) { cur = name; index = 0; send({ action: 'show', rows: rows[name], title: title, index: 1 }) }
+      var buttons = [
+        ['Zwei Optionen', function () { show('two', 'Fahrertür') }],
+        ['Trennlinie', function () { show('divider', 'Person') }],
+        ['30 Zeilen', function () { show('many', 'Viele') }],
+        ['80 Zeichen', function () { show('long', 'Fahrzeug') }],
+        ['Weiter', function () { index = (index + 1) % rows[cur].length; send({ action: 'select', index: index + 1 }) }],
+        ['Ausblenden', function () { send({ action: 'hide' }) }],
+        ['Pille', function () { send({ action: 'pill', key: 'E', label: 'Tür öffnen' }); send({ action: 'pillPos', x: 0.4, y: 0.5 }) }],
+        ['Pille rechts', function () { send({ action: 'pill', key: 'E', label: 'Laderaum öffnen' }); send({ action: 'pillPos', x: 0.95, y: 0.3 }) }],
+        ['Pille aus', function () { send({ action: 'pillHide' }) }],
+        ['Akzent blau', function () { send({ action: 'accent', hex: '#3b82f6' }) }],
+        ['Akzent orange', function () { send({ action: 'accent', hex: '#f0500a' }) }],
+        ['Heller Grund', function () { document.body.className = 'light' }],
+        ['Dunkler Grund', function () { document.body.className = 'dark' }]
+      ]
+      buttons.forEach(function (b) {
+        var el = document.createElement('button')
+        el.textContent = b[0]
+        el.onclick = b[1]
+        document.getElementById('bar').appendChild(el)
+      })
+    </script>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

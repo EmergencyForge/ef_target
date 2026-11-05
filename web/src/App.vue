@@ -1,0 +1,74 @@
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+import TargetPanel, { type Row } from './TargetPanel.vue'
+import KeyPill from './KeyPill.vue'
+
+const rows = ref<Row[]>([])
+const title = ref<string | undefined>()
+const index = ref(1)
+// The panel keeps its last rows while fading out, so hide only flips this flag
+const shown = ref(false)
+const pillKey = ref('')
+const pillLabel = ref('')
+const pillShown = ref(false)
+const pill = ref<InstanceType<typeof KeyPill> | null>(null)
+
+// Dark ink on light accents, white on dark ones; 0.1791 is where both contrasts are equal
+function inkOn(hex: string): string {
+  const lin = (i: number) => {
+    const c = parseInt(hex.substring(i, i + 2), 16) / 255
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  }
+  const l = 0.2126 * lin(1) + 0.7152 * lin(3) + 0.0722 * lin(5)
+  return l > 0.1791 ? '#111113' : '#ffffff'
+}
+
+function setAccent(hex: string) {
+  if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) return
+  const s = document.documentElement.style
+  s.setProperty('--accent-color', hex)
+  s.setProperty('--accent-rgb', [1, 3, 5].map((i) => parseInt(hex.substring(i, i + 2), 16)).join(', '))
+  s.setProperty('--on-accent', inkOn(hex))
+}
+
+function onMessage(e: MessageEvent) {
+  const d = e.data
+  if (!d || typeof d.action !== 'string') return
+  switch (d.action) {
+    case 'show':
+      rows.value = d.rows ?? []
+      title.value = d.title || undefined
+      index.value = d.index ?? 1
+      shown.value = true
+      break
+    case 'select':
+      index.value = d.index
+      break
+    case 'hide':
+      shown.value = false
+      break
+    case 'pill':
+      pillKey.value = d.key ?? ''
+      pillLabel.value = d.label ?? ''
+      pillShown.value = true
+      break
+    case 'pillPos':
+      pill.value?.place(d.x, d.y)
+      break
+    case 'pillHide':
+      pillShown.value = false
+      break
+    case 'accent':
+      setAccent(d.hex)
+      break
+  }
+}
+
+onMounted(() => window.addEventListener('message', onMessage))
+onBeforeUnmount(() => window.removeEventListener('message', onMessage))
+</script>
+
+<template>
+  <TargetPanel :rows="rows" :title="title" :index="index" :shown="shown" />
+  <KeyPill ref="pill" :key-name="pillKey" :label="pillLabel" :shown="pillShown" />
+</template>

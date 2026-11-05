@@ -1,0 +1,22 @@
+{
+  "name": "ef-target-ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "type-check": "vue-tsc -b --noEmit"
+  },
+  "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.3.1",
+    "vue": "^3.5.44"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.9",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "typescript": "~5.6.3",
+    "vite": "^6.4.5",
+    "vue-tsc": "^2.2.12"
+  }
+}
