@@ -70,17 +70,25 @@ end })
 fw = boot()
 check('ox_inventory is the item source', fw.hasItems({ key = 2 }) and not fw.hasItems('bread'))
 
--- ox_core: snapshot at load, then events; a nil grade removes the group
+-- ox_core: every group check goes through CallPlayer
+local throwing = false
 _G.GetResourceState = function(name) return name == 'ox_core' and 'started' or 'missing' end
 _G.exports = setmetatable({}, { __index = function()
-    return { GetPlayer = function() return { groups = { police = 2, mech = 1 } } end }
+    return { CallPlayer = function(_, method, filter)
+        if throwing then error('boom') end
+        if method ~= 'getGroup' then return nil end
+        if type(filter) == 'string' then return filter == 'police' and 2 or nil end
+        if filter.police and filter.police <= 2 then return { 'police', 2 } end
+        return {}
+    end }
 end })
 fw, F = boot()
-check('ox_core: groups present before the first event', fw.hasGroup({ police = 2 }) and fw.hasGroup('mech'))
-handlers['ox:setGroup']('police', 3)
-check('ox_core: setGroup updates the grade', fw.hasGroup({ police = 3 }))
-handlers['ox:setGroup']('police', nil)
-check('ox_core: a nil grade removes the group', not fw.hasGroup('police') and fw.hasGroup('mech'))
+check('ox_core: string hit', fw.hasGroup('police'))
+check('ox_core: string miss', not fw.hasGroup('ems'))
+check('ox_core: hash hit', fw.hasGroup({ police = 2 }))
+check('ox_core: an empty table is a miss', not fw.hasGroup({ police = 3 }))
+throwing = true
+check('ox_core: a throwing call gives false', fw.hasGroup('police') == false)
 
 -- an adapter that throws must not abort loading
 _G.GetResourceState = function(name) return name == 'es_extended' and 'started' or 'missing' end

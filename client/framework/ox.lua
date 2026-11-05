@@ -1,24 +1,12 @@
 EFT.Framework = EFT.Framework or {}
 EFT.Framework.adapters = EFT.Framework.adapters or {}
 
--- ox_core keeps groups only; items come from ox_inventory
+-- ox_core keeps groups private, so every check asks it directly; items come from ox_inventory
 EFT.Framework.adapters.ox_core = function(fw)
-    local groups = {}
-
-    -- Snapshot for the case that ef_target starts after the player has loaded
-    local function snapshot()
-        local player = exports.ox_core:GetPlayer()
-        local current = player and (player.groups or (player.get and player.get('groups')))
-        groups = {}
-        for name, grade in pairs(current or {}) do groups[name] = grade end
-        fw.setGroups(groups)
-    end
-
-    snapshot()
-    RegisterNetEvent('ox:playerLoaded', snapshot)
-    RegisterNetEvent('ox:setGroup', function(name, grade)
-        -- A nil grade means the group was removed
-        groups[name] = grade
-        fw.setGroups(groups)
+    fw.setGroupCheck(function(filter)
+        local ok, result = pcall(function() return exports.ox_core:CallPlayer('getGroup', filter) end)
+        if not ok then return false end
+        -- getGroup answers a grade for a string filter, a { name, grade } pair for a table filter
+        return type(result) == 'number' or (type(result) == 'table' and next(result) ~= nil)
     end)
 end

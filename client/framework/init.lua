@@ -2,12 +2,13 @@ EFT.Framework = EFT.Framework or {}
 local fw = EFT.Framework
 fw.adapters = fw.adapters or {}
 
-local groups, items, itemLookup = {}, {}, nil
+local groups, items, itemLookup, groupCheck = {}, {}, nil, nil
 fw.name = nil
 
 function fw.setGroups(tbl) groups = tbl end
 function fw.setItems(tbl) items = tbl end
 function fw.setItemLookup(fn) itemLookup = fn end
+function fw.setGroupCheck(fn) groupCheck = fn end
 
 -- Turns a string, an array or a { name = value } table into name/value pairs
 local function pairsOf(filter, default)
@@ -24,6 +25,7 @@ end
 
 function fw.hasGroup(filter)
     if not fw.name or filter == nil then return true end
+    if groupCheck then return groupCheck(filter) end
     for _, p in ipairs(pairsOf(filter, 0)) do
         local grade = groups[p[1]]
         if grade and grade >= p[2] then return true end
@@ -53,7 +55,7 @@ for _, name in ipairs({ 'ox_core', 'es_extended', 'qbx_core', 'qb-core' }) do
             -- A broken adapter must not take the whole client script down
             print(('ef_target: framework adapter %s failed: %s'):format(name, tostring(err)))
             fw.name = nil
-            groups, items = {}, {}
+            groups, items, groupCheck = {}, {}, nil
         end
         break
     end
