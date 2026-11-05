@@ -10,3 +10,9 @@ check('german text stays as it is', L('Fahrzeug') == 'Fahrzeug')
 Config.Locale = 'en'
 check('english text is looked up', L('Fahrzeug') == 'Vehicle')
 check('namespace exists', type(EFT) == 'table')
+
+harness.natives.GetGameTimer = function() return 1 end
+harness.natives.GetGameTimer = function() return 2 end
+check('a re-stubbed native replaces the old one', GetGameTimer() == 2)
+
+Config.Locale = 'de'

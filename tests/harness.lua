@@ -19,9 +19,12 @@ harness.vec3 = vec3
 _G.vec3, _G.vector3 = vec3, vec3
 
 -- Assigning an entry also makes it a global, the way FiveM natives are
+-- Values live in a backing table so the proxy stays empty and __newindex fires on every assignment, re-stubs included
+local stubs = {}
 harness.natives = setmetatable({}, {
-    __newindex = function(t, name, fn)
-        rawset(t, name, fn)
+    __index = stubs,
+    __newindex = function(_, name, fn)
+        stubs[name] = fn
         _G[name] = fn
     end,
 })

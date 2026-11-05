@@ -57,6 +57,7 @@ escrow_ignore {
     '*.lua',
     '*.md',
     'client/**',
+    'server/**',
     'shared/**',
     'tests/**',
     'docs/**',
