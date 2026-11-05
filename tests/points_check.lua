@@ -72,6 +72,8 @@ check('collect fills the distance', P.collect(nil, { at(3) }, vec3(0, 4, 0))[1].
 local a, b = { sx = 0.51, sy = 0.5, visible = true }, { sx = 0.49, sy = 0.47, visible = true }
 check('the closest to the centre wins', P.snap({ b, a }, 0.035, 1.78) == a)
 check('an invisible point is never snapped', P.snap({ { sx = 0.5, sy = 0.5, visible = false } }, 0.035, 1.78) == nil)
+local edge = { key = 'edge', sx = 0.525, sy = 0.5, visible = true }
+check('the held point stays past the radius', P.snap({ edge }, 0.035, 1.78, 'edge') == edge and P.snap({ edge }, 0.035, 1.78) == nil)
 check('outside the radius there is no snap', P.snap({ { sx = 0.6, sy = 0.5, visible = true } }, 0.035, 1.78) == nil)
 check('a zone marker is never snapped', P.snap({ { sx = 0.5, sy = 0.5, visible = true, noSnap = true } }, 0.035, 1.78) == nil)
 -- 0.03 across is 0.0534 screen heights at 16:9, the same offset down is only 0.03

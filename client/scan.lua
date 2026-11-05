@@ -16,6 +16,7 @@ local CENTRE_AIM = {}
 -- Bumped on start and stop, a thread that sees another value is out of date
 local generation = 0
 local current = nil
+local snappedKey = nil
 local known, walked, nextWalk, sightCursor = {}, {}, 0, 0
 
 local contains = { sphere = EFT.Geometry.inSphere, box = EFT.Geometry.inBox, poly = EFT.Geometry.inPoly }
@@ -263,7 +264,8 @@ local function step(mine)
 
     local checked = updatePoints(entity, playerCoords, GetGameTimer())
     local drawn = drawList(checked, playerCoords)
-    local point = EFT.Points.snap(drawn, Config.SnapRadius, GetAspectRatio(false))
+    local point = EFT.Points.snap(drawn, Config.SnapRadius, GetAspectRatio(false), snappedKey)
+    snappedKey = point and point.key
 
     current = buildTarget(entity, coords, playerCoords, zonesAt(coords), point)
     Session.update(current)
@@ -277,7 +279,7 @@ function Scan.start()
     generation = generation + 1
     local mine = generation
     -- known stays: the check results of the last press save the next one from starting at zero
-    walked, nextWalk, current = {}, 0, nil
+    walked, nextWalk, current, snappedKey = {}, 0, nil, nil
     CreateThread(function()
         while mine == generation and EFT.Session.isActive() do
             local started = GetGameTimer()

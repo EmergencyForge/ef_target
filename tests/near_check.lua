@@ -317,7 +317,9 @@ end
 check('the pill reads the rebound key', pillKeyFor('t_G') == 'G')
 check('the lookup uses the mapped command', mappings['+ef_target_use'] and buttonArgs and buttonArgs[1] == 0
     and buttonArgs[2] == (joaat('+ef_target_use') | 0x80000000) and buttonArgs[3] == true)
-check('a button without text falls back to the config key', pillKeyFor('b_116') == 'E')
+check('a key without text shows its name', pillKeyFor('b_2000') == 'Leer' and pillKeyFor('b_1000') == 'Shift')
+check('function keys and mouse buttons are named', pillKeyFor('b_174') == 'F5' and pillKeyFor('b_103') == 'M4')
+check('an unknown button does not claim the config key', pillKeyFor('b_9999') == '?')
 check('no answer falls back to the config key', pillKeyFor(nil) == 'E')
 instructional = 't_E'
 

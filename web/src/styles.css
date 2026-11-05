@@ -29,13 +29,16 @@ html, body {
   box-shadow: 0 0 0 1px var(--panel-line), 0 12px 32px rgba(0, 0, 0, 0.4);
   opacity: 0;
   visibility: hidden;
+  transform: translateY(4px) scale(0.985);
+  transform-origin: 0 0;
   pointer-events: none;
-  transition: opacity 120ms var(--ease), visibility 0s linear 120ms;
+  transition: opacity 120ms var(--ease), transform 120ms var(--ease), visibility 0s linear 120ms;
 }
 .tp.show {
   opacity: 1;
   visibility: visible;
-  transition: opacity 120ms var(--ease), visibility 0s;
+  transform: none;
+  transition: opacity 140ms var(--ease), transform 180ms var(--ease), visibility 0s;
 }
 
 .tp-title {
@@ -83,18 +86,40 @@ html, body {
   gap: 8px;
   box-sizing: border-box;
   height: var(--row);
-  padding: 0 8px;
+  padding: 0 calc(var(--key-w) + 14px) 0 8px;
   border-radius: 6px;
   font-size: 12.5px;
   font-weight: 500;
   color: var(--text-2);
+  transition: color 140ms var(--ease);
+  animation: tp-row-in 180ms var(--ease) calc(var(--i) * 16ms) backwards;
 }
-.tp-row.sel {
-  background: rgba(255, 255, 255, 0.13);
-  color: #fff;
-}
+.tp-row.sel { color: #fff; }
 .tp-row > * { position: relative; }
-.tp-row .fill { position: absolute; }
+@keyframes tp-row-in {
+  from { opacity: 0; transform: translateY(4px); }
+}
+
+/* One element that travels, so the highlight, the key and the hold fill move as a unit */
+.tp-cursor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--row);
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.13);
+  transition: transform 170ms var(--ease);
+}
+.tp-cursor .fill { position: absolute; }
+.tp-cursor .kbd {
+  position: absolute;
+  right: 8px;
+  top: 5px;
+  transition: opacity 120ms var(--ease);
+}
+.tp-cursor .kbd.off { opacity: 0; }
 .tp-row.divider {
   overflow: visible;
   margin-top: 5px;
@@ -122,10 +147,10 @@ html, body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tp-row .tp-chev { width: 10px; font-size: 9px; opacity: 0.55; }
+.tp-row .tp-chev { position: absolute; right: 12px; width: 10px; font-size: 9px; opacity: 0.55; }
 .tp-row em, .pill em { font-size: 10.5px; font-style: normal; opacity: 0.72; }
 /* border-box: the kit's 20px minimum plus its padding made a single letter 30px wide */
-.tp-row .kbd, .pill .kbd {
+.tp-cursor .kbd, .pill .kbd {
   flex: none;
   box-sizing: border-box;
   background: var(--accent-color);
@@ -140,7 +165,7 @@ html, body {
   transform-origin: 0 50%;
   transition: transform 140ms ease-out;
 }
-.holding .tp-row.sel .fill, .holding .pill .fill {
+.holding .tp-cursor .fill, .holding .pill .fill {
   transform: scaleX(1);
   transition: transform var(--hold-ms) linear;
 }

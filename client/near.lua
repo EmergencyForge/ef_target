@@ -52,10 +52,31 @@ local function hidePill()
     end
 end
 
+-- Keys without a printable name come back as button icons. Community table, not documented by cfx.re:
+-- https://forum.cfx.re/t/help-how-to-get-the-current-keybind-of-a-registered-keymap/1847600/7
+local BUTTON_KEYS = {
+    [100] = 'M1', [101] = 'M2', [102] = 'M3', [115] = 'Rad auf', [116] = 'Rad ab',
+    [130] = 'Num-', [131] = 'Num+', [134] = 'Num*', [135] = 'Enter',
+    [194] = '↑', [195] = '↓', [196] = '←', [197] = '→', [198] = 'Entf', [199] = 'Esc', [200] = 'Einfg', [201] = 'Ende',
+    [210] = 'Entf', [211] = 'Einfg', [212] = 'Ende', [1000] = 'Shift', [1002] = 'Tab', [1003] = 'Enter',
+    [1004] = 'Back', [1008] = 'Pos1', [1009] = 'Bild auf', [1010] = 'Bild ab', [1012] = 'Caps', [1013] = 'Strg',
+    [1014] = 'Strg', [1015] = 'Alt', [1055] = 'Pos1', [1056] = 'Bild auf', [2000] = 'Leer',
+}
+
+local function buttonKey(code)
+    if code >= 103 and code <= 110 then return 'M' .. code - 99 end
+    if code >= 137 and code <= 145 then return 'Num' .. code - 136 end
+    if code >= 170 and code <= 193 then return 'F' .. code - 169 end
+    return BUTTON_KEYS[code] and L(BUTTON_KEYS[code]) or '?'
+end
+
 -- The player can rebind the key in the game settings, the config only holds its default
 function Near.useKey()
     local button = GetControlInstructionalButton(0, joaat('+ef_target_use') | 0x80000000, true)
-    return button and button:match('^t_(.+)$') or Config.UseKey
+    if not button then return Config.UseKey end
+    local code = button:match('^b_(%d+)$')
+    if code then return buttonKey(tonumber(code)) end
+    return button:match('^t_(.+)$') or Config.UseKey
 end
 
 local function pillFrames()

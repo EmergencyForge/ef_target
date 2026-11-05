@@ -2,6 +2,8 @@
 local Points = {}
 EFT.Points = Points
 
+local SNAP_HOLD = 0.7
+
 local MERGE_DISTANCE = 0.4
 -- Round robin position for refresh, one point per call keeps the cross-resource filter calls spread out
 local cursor = 0
@@ -77,12 +79,14 @@ function Points.pick(points, max)
 end
 
 -- Distance is in screen heights so the snap zone is a circle on any aspect ratio
-function Points.snap(points, radius, aspect)
+-- heldKey counts as closer than it is, a cursor resting on the edge of the radius must not flip between targets
+function Points.snap(points, radius, aspect, heldKey)
     local best, bestDist = nil, radius
     for _, point in ipairs(points) do
         if point.visible and not point.noSnap and point.sx then
             local dx, dy = (point.sx - 0.5) * aspect, point.sy - 0.5
             local dist = math.sqrt(dx * dx + dy * dy)
+            if heldKey and point.key == heldKey then dist = dist * SNAP_HOLD end
             if dist < bestDist then best, bestDist = point, dist end
         end
     end

@@ -20,6 +20,7 @@ natives.CreateRuntimeTexture = function(_, name) current = { name = name, alpha 
 natives.SetRuntimeTexturePixel = function(t, x, y, r, _, _, a) t.alpha[y * 64 + x] = a; t.shade[y * 64 + x] = r end
 natives.CommitRuntimeTexture = function(t) committed[t.name] = true end
 natives.GetAspectRatio = function() return 16 / 9 end
+natives.GetScreenCoordFromWorldCoord = function() return true, 0.7, 0.5 end
 natives.GetFrameTime = function() return 1 / 60 end
 natives.CreateThread = function() end
 natives.Wait = function() end
@@ -92,8 +93,9 @@ check('the centre dot is painted', alpha('frame0', 0, 0) == 255)
 check('a point has no dot and no gap', alpha('point', 0, 0) == 0 and alpha('point', 0, -22) > 200)
 
 sprites = {}
-Render.setPoints({}); Render.setAim({}, false); Render.drawFrame()
-check('an aim without coords draws at the screen centre', sprites[1] and sprites[1].x == 0.5 and sprites[1].y == 0.5)
+Render.setPoints({}); Render.setAim({}, false); frames(60)
+sprites = {}; Render.drawFrame()
+check('an aim without coords draws at the screen centre', sprites[1] and math.abs(sprites[1].x - 0.5) < 0.001 and sprites[1].y == 0.5)
 
 Render.setPoints({}); Render.setAim(nil, false)
 check('the marker turns away before the thread stops', Render.needsFrame())
@@ -167,6 +169,12 @@ Render.start(); Render.setPoints({ thirty[1] }); frames(60)
 Render.setAim({}, false)
 point, marker = headings()
 check('near points stay while the own marker turns in', math.abs(point.heading - 45.0) < 0.1 and marker.heading < 10.0)
+frames(60)
+Render.setAim({ key = 'p', coords = vec3(0, 0, 0) }, true)
+marker = select(2, headings())
+check('a new aim starts where the marker was', math.abs(marker.x + 0.2) < 0.03)
+frames(60); marker = select(2, headings())
+check('the marker lands on its target', math.abs(marker.x) < 0.001)
 Render.setAim(nil, false); Render.stop()
 
 -- The thread runs inline here, a Wait hook ends it after the springs settled on a hit

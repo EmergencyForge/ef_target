@@ -11,6 +11,7 @@ local HIT_SCALE = 0.85
 local HEADING = 45.0
 local FADE_END = 0.35 -- share of the turn after which a marker is fully visible
 local GONE = 0.02
+local COVERED = 0.2 -- a point hides once the marker has slid this close to it
 
 -- Painted at runtime and not shipped as files, so the line width can come from the config
 local SIZE = 64
@@ -40,12 +41,19 @@ local scale = { value = 1.0, velocity = 0.0 }
 -- Two springs: with near points on screen the own marker still has to turn in on its own
 local aimTurn = { value = 0.0, velocity = 0.0 }
 local pointTurn = { value = 0.0, velocity = 0.0 }
+-- Runs from 1 to 0 after a new aim. The marker stays pinned to its target and only an offset eases out,
+-- easing the position itself would make it trail the camera.
+local slide = { value = 0.0, velocity = 0.0 }
+local slideX, slideY = 0.0, 0.0
+local lastId, lastX, lastY = nil, nil, nil
 
 local function resetSprings()
     fill.value, fill.velocity = 0.0, 0.0
     scale.value, scale.velocity = 1.0, 0.0
     aimTurn.value, aimTurn.velocity = 0.0, 0.0
     pointTurn.value, pointTurn.velocity = 0.0, 0.0
+    slide.value, slide.velocity = 0.0, 0.0
+    lastId, lastX, lastY = nil, nil, nil
 end
 
 local function motion(turn)
@@ -146,10 +154,32 @@ function Render.drawFrame()
     Sp.step(pointTurn, active and #points > 0 and 1.0 or 0.0, dt)
 
     local marked = (aim or aimTurn.value > GONE) and lastAim or nil
+    local offsetX, offsetY = 0.0, 0.0
+    if marked then
+        local onScreen, x, y = true, 0.5, 0.5
+        if marked.coords then
+            onScreen, x, y = GetScreenCoordFromWorldCoord(marked.coords.x, marked.coords.y, marked.coords.z)
+        end
+        if onScreen then
+            local id = marked.key or marked
+            if id ~= lastId then
+                if lastId then
+                    slideX, slideY = lastX - x, lastY - y
+                    slide.value, slide.velocity = 1.0, 0.0
+                end
+                lastId = id
+            end
+            Sp.step(slide, 0.0, dt)
+            offsetX, offsetY = slideX * slide.value, slideY * slide.value
+            lastX, lastY = x + offsetX, y + offsetY
+        end
+    end
+
+    local covered = marked and slide.value < COVERED
     local heading, alpha = motion(pointTurn)
     for _, point in ipairs(points) do
         -- The aimed point is drawn by the aim marker, two sprites would fight
-        if not (marked and (marked == point or (point.key and point.key == marked.key))) then
+        if not (covered and (marked == point or (point.key and point.key == marked.key))) then
             SetDrawOrigin(point.coords.x, point.coords.y, point.coords.z, 0)
             drawPoint(heading, alpha)
             ClearDrawOrigin()
@@ -160,10 +190,10 @@ function Render.drawFrame()
         local r, g, b = EFT.Accent.rgb()
         if marked.coords then
             SetDrawOrigin(marked.coords.x, marked.coords.y, marked.coords.z, 0)
-            drawAim(0.0, 0.0, r, g, b)
+            drawAim(offsetX, offsetY, r, g, b)
             ClearDrawOrigin()
         else
-            drawAim(0.5, 0.5, r, g, b)
+            drawAim(0.5 + offsetX, 0.5 + offsetY, r, g, b)
         end
     end
 end
