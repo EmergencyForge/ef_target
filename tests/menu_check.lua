@@ -145,6 +145,15 @@ S.run({ point = ptPoint, option = { qtarget = true, onSelect = function(a) seen 
 check('qtarget on a point row gets the point entity', seen == 6)
 _G.NetworkGetEntityIsNetworked, _G.NetworkGetNetworkIdFromEntity = nil, nil
 
+-- A coords point has no entity: neither the callback nor the stale check may fall back to the target's
+local called, arg = false, 'unset'
+local coordsPoint = { key = 'cp', coords = vec3(2, 2, 2), distance = 1.0 }
+S.run({ point = coordsPoint, option = { qtarget = true, onSelect = function(a) called, arg = true, a end } }, { entity = 5, coords = vec3(0, 0, 0), distance = 1 }, state)
+check('qtarget on a coords point is called with nil', called and arg == nil)
+called = false
+check('a coords point survives a vanished target entity',
+    S.run({ point = coordsPoint, option = { onSelect = function() called = true end } }, { entity = 99, coords = vec3(0, 0, 0), distance = 1 }, state) == 'closed' and called)
+
 -- Leave no stubs behind for the checks that run after this file
 for _, name in ipairs({ 'Config', 'L', 'GetGameTimer', 'DoesEntityExist', 'exports', 'TriggerEvent', 'TriggerServerEvent', 'ExecuteCommand' }) do
     _G[name] = nil

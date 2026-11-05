@@ -34,7 +34,8 @@ end
 local function call(row, option, target)
     local response = Select.response(option, target, false, row)
     if option.onSelect then
-        option.onSelect(option.qtarget and response.entity or response)
+        -- Explicit branch: a coords point has a nil entity, which an and/or chain would swallow
+        if option.qtarget then option.onSelect(response.entity) else option.onSelect(response) end
     elseif option.export then
         exports[option.resource or row.entry.resource][option.export](nil, response)
     elseif option.event then
@@ -54,9 +55,10 @@ function Select.run(row, target, state)
         return 'menu'
     end
 
-    local entity = row.point and row.point.entity or target.entity
+    local context = EFT.Menu.context(row, target)
+    local entity = context.entity
     if entity and entity ~= 0 and not DoesEntityExist(entity) then return 'stale' end
-    if not EFT.Filter.force(option, EFT.Menu.context(row, target)) then return 'stale' end
+    if not EFT.Filter.force(option, context) then return 'stale' end
 
     local result = 'closed'
     local savedMenu, savedHistory = state.menu, #state.history
