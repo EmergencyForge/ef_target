@@ -181,7 +181,7 @@ local function drawList(checked, playerCoords)
         if zone.openHeight then center = vec3(center.x, center.y, playerCoords.z) end
         local distance = #(center - playerCoords)
         if zone.drawSprite ~= false and anyStatic(zone.options, distance, menu) then
-            list[#list + 1] = { key = 'zone:' .. zone.id, coords = zone.center, distance = distance, noSnap = true, visible = true }
+            list[#list + 1] = { key = 'zone:' .. zone.id, coords = center, distance = distance, noSnap = true, visible = true }
         end
     end
     list = EFT.Points.pick(list, Config.MaxPoints)
@@ -245,7 +245,11 @@ local function checkSight(checked, ped)
     local point = nextSight(candidates)
     local hit, _, coords, status = probe(GetWorldCoordFromScreenCoord(0.5, 0.5), point.coords, FLAGS_ALL, ped)
     -- No answer is not a clear view, the last real one stands
-    if status == SHAPE_FAILED then return end
+    if status == SHAPE_FAILED then
+        -- A point that never got an answer would otherwise stay first in the queue for good
+        if point.clear == nil then point.clear = false end
+        return
+    end
     point.clear = not hit or #(coords - point.coords) < SIGHT_TOLERANCE
 end
 

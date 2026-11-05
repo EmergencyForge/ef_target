@@ -541,6 +541,14 @@ pointId = efExports.AddPoint({ coords = vec3(1, 2, 3), options = { label = 'Here
 check('a coords point is a point entry', R.coordsEntries()[1].anchor.coords.z == 3)
 efExports.Remove(pointId)
 check('Remove takes a coords point away', #R.coordsEntries() == 0)
+pointId = efExports.AddPoint({ coords = { x = 1.0, y = 2.0, z = 3.0, w = 90.0 }, options = { label = 'Four' } })
+local stored = R.coordsEntries()[1].anchor.coords
+check('coords of a vector4 or table become a vec3', stored.w == nil and stored.z == 3.0 and pcall(function() return stored - vec3(0, 0, 0) end))
+efExports.Remove(pointId)
+local callerOption = { label = 'Mine' }
+pointId = efExports.AddPoint({ coords = vec3(1, 2, 3), distance = 4.0, options = { callerOption } })
+check('the point distance lands on a copy', R.coordsEntries()[1].options[1].distance == 4.0 and callerOption.distance == nil)
+efExports.Remove(pointId)
 check('a point needs a place', not pcall(efExports.AddPoint, { bone = 'door', options = { label = 'x' } }))
 check('a point on an entity needs an anchor', not pcall(efExports.AddPoint, { global = 'vehicle', options = { label = 'x' } }))
 

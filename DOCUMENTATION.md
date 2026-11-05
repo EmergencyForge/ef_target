@@ -24,7 +24,7 @@ Alt halten (`LMENU`, in den FiveM-Tastenbelegungen änderbar). In der Bildmitte 
 - Alt loslassen bricht ab.
 - Es gibt keine Bedienung mit dem Mauszeiger. Kamera und Laufen bleiben frei, die NUI nimmt keinen Fokus.
 - Solange Alt aktiv ist, sind Schießen, Zielen und Nahkampf gesperrt, das Mausrad schaltet keine Waffe um.
-- Alt endet von selbst bei Pausenmenü, Tod, laufendem ef_lib-Fortschrittsbalken (`lib.progressActive` bei ox_lib) und `DisableTargeting(true)`.
+- Alt endet von selbst bei Pausenmenü, Tod, NUI-Fokus (etwa ein offenes Menü einer anderen Resource), laufendem Fortschrittsbalken von ef_lib oder ox_lib und `DisableTargeting(true)`.
 
 Rastet die Raute auf einem Punkt ein, stehen dessen Optionen oben und sind vorausgewählt. Nach einer Trennlinie folgen die allgemeinen Optionen der Entity. Ein Punkt wird nur gezeichnet, wenn mindestens eine seiner Optionen für den Spieler erlaubt ist. Zonen bekommen eine kleine Raute am Mittelpunkt, die nicht einrastet. `drawSprite = false` schaltet sie ab.
 
@@ -88,7 +88,7 @@ Genau eins von `global`, `model`, `entity`, `coords` ist nötig. Bei den drei er
 
 `alt`: Der Punkt erscheint nur bei gehaltenem Alt.
 
-`near`: Der Punkt erscheint ohne Taste, sobald der Spieler in `distance` ist und mindestens eine Option erlaubt ist. Der nächste zeigt eine Tastenpille mit `E` und dem Text der ersten erlaubten Option, `E` führt sie aus. Hat der Punkt mehrere Optionen, wählt der Spieler sie bei gehaltenem Alt im Panel. Eine Option, die nur ein Untermenü öffnet, nimmt die Pille nicht. Im Fahrzeug erscheinen `near`-Punkte nicht. Ohne `near`-Punkte läuft im Leerlauf nichts.
+`near`: Der Punkt erscheint ohne Taste, sobald der Spieler in `distance` ist und mindestens eine Option erlaubt ist. Der nächste zeigt eine Tastenpille mit `E` und dem Text der ersten erlaubten Option, `E` führt sie aus. Hat der Punkt mehrere Optionen, wählt der Spieler sie bei gehaltenem Alt im Panel. Eine Option, die nur ein Untermenü öffnet, nimmt die Pille nicht. Öffnen alle Optionen eines `near`-Punkts nur ein Untermenü, bekommt er weder Marker noch Pille, außer bei gehaltenem Alt. Im Fahrzeug erscheinen `near`-Punkte nicht. Ohne `near`-Punkte läuft im Leerlauf nichts.
 
 ### Zonen
 
@@ -136,13 +136,13 @@ Unterschiede zu ox_target:
 
 - Box- und Polyzonen decken die Höhe von `minZ` bis `maxZ` ab, wie bei PolyZone. ox_target verschiebt die Box um die halbe Höhe. Fehlt eine der Grenzen, ist die Höhe um die Mitte offen (450 m nach oben und unten).
 - Die Callbacks von lib.zones (`onEnter`, `onExit`, `inside`) laufen an Zonen nicht.
-- `getTargetOptions` liefert eine einfache Tabelle (`global`, `model`, `entity`, `localEntity`, ohne Entity zusätzlich `globalTarget` und `__global`), ohne `size`, `wipe` und `set`.
+- `getTargetOptions` liefert eine einfache Tabelle (`global`, `model`, `entity`, `localEntity`, ohne Entity statt `global` dann `globalTarget`, dazu `__global`), ohne `size`, `wipe` und `set`.
 - Lokale Entities, die nicht mehr existieren, werden nicht aufgeräumt, die Optionen bleiben bis `Remove` oder bis die Ressource stoppt. Vernetzte Entities räumt der Server alle 10 s auf.
 - `removeModel`, `removeEntity` und `removeLocalEntity` ohne Namen leeren den Schlüssel auch für andere Ressourcen, wie bei ox_target.
 
 ## Umstieg von qb-target und qtarget
 
-Maßstab ist qb-target 5.3.9. Es gibt `AddBoxZone`, `AddPolyZone`, `AddCircleZone`, `AddEntityZone`, `RemoveZone`, `AddTargetBone`, `RemoveTargetBone`, `AddTargetEntity`, `RemoveTargetEntity`, `AddTargetModel`, `RemoveTargetModel`, `AddGlobalPed`, `AddGlobalVehicle`, `AddGlobalObject`, `AddGlobalPlayer`, die zugehörigen `RemoveGlobal...` sowie die qtarget-Namen `Ped`, `Vehicle`, `Object`, `Player` und ihre `Remove...`. `job`, `gang`, `jobType`, `citizenid`, die `exclude`-Felder, `item`, `required_item`, `event` mit `type` (`client`, `server`, `command`, `qbcommand`) und `action` werden übersetzt.
+Maßstab ist qb-target 5.5.0 (Commit a3ea78b). Es gibt `AddBoxZone`, `AddPolyZone`, `AddCircleZone`, `AddEntityZone`, `RemoveZone`, `AddTargetBone`, `RemoveTargetBone`, `AddTargetEntity`, `RemoveTargetEntity`, `AddTargetModel`, `RemoveTargetModel`, `AddGlobalPed`, `AddGlobalVehicle`, `AddGlobalObject`, `AddGlobalPlayer`, die zugehörigen `RemoveGlobal...` sowie die qtarget-Namen `Ped`, `Vehicle`, `Object`, `Player` und ihre `Remove...`. `job`, `gang`, `jobType`, `citizenid`, die `exclude`-Felder, `item`, `required_item`, `event` mit `type` (`client`, `server`, `command`, `qbcommand`) und `action` werden übersetzt.
 
 ### Lücken
 

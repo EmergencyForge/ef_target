@@ -12,12 +12,21 @@ end
 
 local function addPoint(data)
     local resource = caller()
-    local options = Registry.normalize(data.options)
-    for _, option in ipairs(options) do option.distance = option.distance or data.distance end
+    local source = Registry.normalize(data.options)
+    -- Copies, so the default reach never lands in the caller's own tables
+    local options = {}
+    for i, option in ipairs(source) do
+        local copy = {}
+        for k, v in pairs(option) do copy[k] = v end
+        copy.distance = copy.distance or data.distance
+        options[i] = copy
+    end
 
     local extra = { show = data.show, label = data.label }
     if data.coords then
-        extra.anchor = { coords = data.coords }
+        -- Scripts also pass vector4 and plain tables, and the near check does vector3 math on this
+        local c = data.coords
+        extra.anchor = { coords = vec3(c.x or c[1], c.y or c[2], c.z or c[3]) }
         return Registry.add('point', 'coords', options, resource, extra)
     end
     if not (data.global or data.model or data.entity) then

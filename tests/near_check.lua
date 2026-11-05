@@ -227,6 +227,25 @@ R.remove(modelId)
 pump(2)
 check('the near thread ends with the last near point', #threads == 0)
 
+-- A failing sync must not end the thread, nor leave it marked as running
+local flaky = R.add('global', 'vehicle', nearOption, 'res', { show = 'near', anchor = { bone = 'door_dside_f' } })
+local realSync, syncCalls, printed, realPrint = N.sync, 0, {}, print
+N.sync = function() syncCalls = syncCalls + 1; error('boom') end
+_G.print = function(...) printed[#printed + 1] = table.concat({ ... }, ' ') end
+pump(5)
+_G.print = realPrint
+check('a throwing sync does not stop later ticks', syncCalls >= 4 and #threads == 1)
+check('one failure kind prints once', #printed == 1)
+N.sync = realSync
+R.remove(flaky)
+pump(2)
+check('the thread ends after failures too', #threads == 0)
+flaky = R.add('global', 'vehicle', nearOption, 'res', { show = 'near', anchor = { bone = 'door_dside_f' } })
+check('a new near point starts a thread again', #threads == 1)
+R.remove(flaky)
+pump(2)
+threads = {}
+
 -- Near: which entry and option speak for a point
 local altFirst = R.add('global', 'vehicle', { label = 'Alt' }, 'res', { anchor = { bone = 'door_dside_f' } })
 nearId = R.add('global', 'vehicle', nearOption, 'res', { show = 'near', anchor = { bone = 'door_dside_f' } })
@@ -421,6 +440,21 @@ scans(8)
 check('a sight ray stopping at the point counts as clear', #drawn >= 1)
 sightHit = nil
 
+-- A point whose very first sight test fails must not hold the queue
+local fresh = R.add('global', 'vehicle', { name = 'fresh', label = 'Neu', distance = 5.0 }, 'res', { anchor = { bone = 'far' } })
+sightHit = { failed = true }
+scans(2)
+sightTargets = {}
+scans(8)
+local seen = {}
+for _, target in ipairs(sightTargets) do seen[tostring(target.y)] = true end
+local kinds = 0
+for _ in pairs(seen) do kinds = kinds + 1 end
+check('an unanswered first sight test does not block the queue', kinds >= 2)
+sightHit = nil
+R.remove(fresh)
+scans(2)
+
 scans(1)
 local hidesBefore = count('pillHide')
 justPressed[24] = true
@@ -570,6 +604,7 @@ local openZone = R.addZone({ coords = vec3(-1, 0, 200), size = vec3(2, 2, 900), 
 press()
 scans(2)
 check('an open height zone has its marker in horizontal reach', #drawn == 1 and drawn[1].noSnap)
+check('an open height marker stands at the player height', drawn[1].coords.z == world[ped].coords.z)
 world[ped].coords = vec3(-15, 0, 0)
 scans(2)
 check('an open height zone still ends at its horizontal reach', #drawn == 0)

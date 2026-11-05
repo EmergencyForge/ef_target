@@ -41,7 +41,11 @@ function Session.blocked()
         local ok, busy = pcall(function() return exports.ef_lib:IsProgressBarActive() end)
         if ok and busy then return true end
     end
-    if lib and lib.progressActive and lib.progressActive() then return true end
+    -- ox_lib exports its functions, its lib table is not loaded into this resource
+    if exports and GetResourceState and GetResourceState('ox_lib') == 'started' then
+        local ok, busy = pcall(function() return exports.ox_lib:progressActive() end)
+        if ok and busy then return true end
+    end
     return false
 end
 

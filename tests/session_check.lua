@@ -33,6 +33,22 @@ local A = { name = 'a', label = 'A', onSelect = run }
 local B = { name = 'b', label = 'B', onSelect = run }
 local two, reversed, one = target({ A, B }), target({ B, A }), target({ A })
 
+-- ox_lib exports every lib function, the lib table itself is not in this resource
+local oxState, oxBusy, oxCalls = 'started', false, 0
+_G.GetResourceState = function() return oxState end
+_G.exports = {
+    ox_lib = { progressActive = function() oxCalls = oxCalls + 1; if oxBusy == 'throw' then error('old lib') end return oxBusy end },
+    ef_lib = { IsProgressBarActive = function() return false end },
+}
+check('idle ox_lib does not block', S.blocked() == false and oxCalls == 1)
+oxBusy = true
+check('an active ox_lib progress blocks', S.blocked() == true)
+oxBusy = 'throw'
+check('a throwing ox_lib export does not block', S.blocked() == false)
+oxBusy, oxCalls, oxState = true, 0, 'stopped'
+check('a stopped ox_lib is not asked', S.blocked() == false and oxCalls == 0)
+_G.GetResourceState, _G.exports = nil, nil
+
 check('a session starts', S.begin() == true and S.isActive())
 S.update(two)
 check('the first row is selected', sent[#sent].index == 1)
