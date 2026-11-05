@@ -18,22 +18,11 @@ const page = ref(0)
 const keyName = ref('E')
 const pill = ref<InstanceType<typeof KeyPill> | null>(null)
 
-// Dark ink on light accents, white on dark ones; 0.1791 is where both contrasts are equal
-function inkOn(hex: string): string {
-  const lin = (i: number) => {
-    const c = parseInt(hex.substring(i, i + 2), 16) / 255
-    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
-  }
-  const l = 0.2126 * lin(1) + 0.7152 * lin(3) + 0.0722 * lin(5)
-  return l > 0.1791 ? '#111113' : '#ffffff'
-}
-
 function setAccent(hex: string) {
   if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) return
   const s = document.documentElement.style
   s.setProperty('--accent-color', hex)
   s.setProperty('--accent-rgb', [1, 3, 5].map((i) => parseInt(hex.substring(i, i + 2), 16)).join(', '))
-  s.setProperty('--on-accent', inkOn(hex))
 }
 
 // One CSS transition per hold, Lua only says when it starts and ends
