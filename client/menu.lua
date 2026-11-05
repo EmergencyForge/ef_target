@@ -4,6 +4,16 @@ EFT.Menu = Menu
 
 local titles = { [1] = 'Person', [2] = 'Fahrzeug', [3] = 'Objekt' }
 
+-- One context for showing and running a row, so a visible option cannot go stale on click
+function Menu.context(row, target)
+    local point = row.point
+    if point then
+        return { entity = point.entity, distance = point.distance, coords = point.coords,
+            bone = row.entry and row.entry.anchor and row.entry.anchor.bone }
+    end
+    return { entity = target.entity, distance = target.distance, coords = target.coords }
+end
+
 -- Point rows come first, then the general entries of the entity, then zones
 function Menu.build(target, state)
     local rows = {}
@@ -14,12 +24,12 @@ function Menu.build(target, state)
         rows[1] = { id = back.name, label = back.label, icon = back.icon, divider = false, option = back }
     end
 
-    local function add(entry, id, options, ctx, distance, extra)
+    local function add(entry, id, options, target, distance, extra)
         for index, option in ipairs(options) do
-            if EFT.Filter.static(option, distance, state.menu) and EFT.Filter.interact(option, ctx, now) then
-                local row = { id = id .. ':' .. index, label = option.label, icon = option.icon, iconColor = option.iconColor,
-                    divider = false, option = option, entry = entry }
-                for k, v in pairs(extra or {}) do row[k] = v end
+            local row = { id = id .. ':' .. index, label = option.label, icon = option.icon, iconColor = option.iconColor,
+                divider = false, option = option, entry = entry }
+            for k, v in pairs(extra or {}) do row[k] = v end
+            if EFT.Filter.static(option, distance, state.menu) and EFT.Filter.interact(option, Menu.context(row, target), now) then
                 rows[#rows + 1] = row
             end
         end
@@ -28,21 +38,21 @@ function Menu.build(target, state)
     local point = target.point
     if point then
         for _, entry in ipairs(point.entries) do
-            local ctx = { entity = point.entity, distance = point.distance, coords = point.coords, bone = entry.anchor and entry.anchor.bone }
-            add(entry, entry.id, entry.options, ctx, point.distance, { point = point })
+            add(entry, entry.id, entry.options, target, point.distance, { point = point })
         end
     end
     local pointRows = #rows
 
-    local ctx = { entity = target.entity, distance = target.distance, coords = target.coords }
     for _, entry in ipairs(target.entries) do
-        add(entry, entry.id, entry.options, ctx, entry.unlimited and 0 or target.distance)
+        add(entry, entry.id, entry.options, target, entry.unlimited and 0 or target.distance)
     end
     for _, zone in ipairs(target.zones) do
-        add(zone, 'z' .. zone.id, zone.options, ctx, target.distance, { zone = zone.id })
+        add(zone, 'z' .. zone.id, zone.options, target, target.distance, { zone = zone.id })
     end
 
-    if point and rows[pointRows + 1] then rows[pointRows + 1].divider = true end
+    -- The back row is not a point row, so count point rows apart from it
+    local backRows = state.menu and 1 or 0
+    if pointRows > backRows and rows[pointRows + 1] then rows[pointRows + 1].divider = true end
 
     local title = point and point.label
     if not title and target.entity and target.entity ~= 0 and titles[target.entityType] then title = L(titles[target.entityType]) end

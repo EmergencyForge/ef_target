@@ -10,10 +10,10 @@ function Select.response(option, target, server, row)
     for k, v in pairs(option) do response[k] = v end
     for _, key in ipairs(dropped) do response[key] = nil end
     response.entity = server and (target.netId or 0) or target.entity
-    response.coords = target.coords
-    response.distance = target.distance
-    response.zone = row and row.zone or nil
     local point = row and row.point
+    response.coords = point and point.coords or target.coords
+    response.distance = point and point.distance or target.distance
+    response.zone = row and row.zone or nil
     response.point = point and { key = point.key, coords = point.coords } or nil
     return response
 end
@@ -41,13 +41,12 @@ function Select.run(row, target, state)
         return 'menu'
     end
 
-    local entity = target.entity
+    local entity = row.point and row.point.entity or target.entity
     if entity and entity ~= 0 and not DoesEntityExist(entity) then return 'stale' end
-    local ctx = { entity = entity, distance = target.distance, coords = target.coords,
-        bone = row.entry and row.entry.anchor and row.entry.anchor.bone }
-    if not EFT.Filter.force(option, ctx) then return 'stale' end
+    if not EFT.Filter.force(option, EFT.Menu.context(row, target)) then return 'stale' end
 
     local result = 'closed'
+    local savedMenu, savedHistory = state.menu, #state.history
     if option.openMenu then
         -- nil cannot live in an array, so the home menu is stored as 'home'
         state.history[#state.history + 1] = state.menu or 'home'
@@ -57,6 +56,8 @@ function Select.run(row, target, state)
     local ok, err = pcall(call, row, option, target)
     if not ok then
         print(('[ef_target] option %s failed: %s'):format(option.name or option.label or '?', tostring(err)))
+        for i = #state.history, savedHistory + 1, -1 do state.history[i] = nil end
+        state.menu = savedMenu
         return 'closed'
     end
     return result

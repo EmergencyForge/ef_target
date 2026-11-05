@@ -108,6 +108,28 @@ check('the response carries zone and point', S.response({}, target, false, { zon
     and S.response({}, target, false, { point = point }).point.key == 'k')
 check('the response does not touch the option', (function() local o = { icon = 'x' }; S.response(o, target); return o.icon == 'x' end)())
 
+-- Point rows use the point's own context, both when shown and when run
+local seen
+local ptPoint = { key = 'p', coords = vec3(9, 9, 9), distance = 1.0, entity = 6,
+    entries = { entry({ { label = 'Near', canInteract = function(_, d) return d == 1.0 end, onSelect = function(r) seen = r end } }, { id = 7, anchor = { bone = 'b' } }) } }
+local ptTarget = { point = ptPoint, entries = {}, zones = {}, entity = 5, entityType = 2, coords = vec3(0, 0, 0), distance = 4.0 }
+local ptRows = M.build(ptTarget, state)
+check('a point option is judged by the point distance', #ptRows == 1)
+check('a point option still runs on click', S.run(ptRows[1], ptTarget, state) == 'closed' and seen ~= nil)
+check('its response carries the point coords and distance', seen.coords == vec3(9, 9, 9) and seen.distance == 1.0)
+
+local hidden = { point = { key = 'h', coords = vec3(1, 1, 1), distance = 1.0, entity = 5,
+    entries = { entry({ { label = 'Hidden', canInteract = function() return false end } }, { id = 8, anchor = { bone = 'b' } }) } },
+    entries = { general }, zones = {}, entity = 5, entityType = 2, coords = vec3(0, 0, 0), distance = 2.0 }
+check('no divider when every point option is filtered out', not M.build(hidden, state)[1].divider)
+check('a back row alone does not earn a divider', not M.build(hidden, { menu = 'sub', history = {} })[2])
+
+local failState = { menu = 'a', history = { 'home' } }
+_G.print = function() end
+local failed = S.run({ option = { openMenu = 'b', onSelect = function() error('x') end } }, target, failState)
+_G.print = realPrint
+check('a throwing target after openMenu restores the menu', failed == 'closed' and failState.menu == 'a' and #failState.history == 1)
+
 -- Leave no stubs behind for the checks that run after this file
 for _, name in ipairs({ 'Config', 'L', 'GetGameTimer', 'DoesEntityExist', 'exports', 'TriggerEvent', 'TriggerServerEvent', 'ExecuteCommand' }) do
     _G[name] = nil
