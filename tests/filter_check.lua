@@ -43,6 +43,11 @@ check('distance filters', not F.static({ distance = 2.0 }, 2.5, nil))
 check('default distance is 7', F.static({}, 6.9, nil) and not F.static({}, 7.1, nil))
 check('a submenu hides the home options', not F.static({}, 1.0, 'sub'))
 check('a submenu shows its own options', F.static({ menuName = 'sub' }, 1.0, 'sub'))
+check('a guard can hide an option', not F.static({ guard = function() return false end }, 1.0, nil))
+check('a passing guard leaves it', F.static({ guard = function() return true end }, 1.0, nil))
+local seenArgs
+F.force({ name = 'n', canInteract = function(...) seenArgs = { ... }; return true end }, { entity = 1, distance = 2.0, coords = 'c', bone = 'b' })
+check('canInteract gets the ox arguments', seenArgs[3] == 'c' and seenArgs[4] == 'n' and seenArgs[5] == 'b')
 
 -- ESX detected, player not loaded yet
 _G.GetResourceState = function(name) return name == 'es_extended' and 'started' or 'missing' end
@@ -60,6 +65,23 @@ handlers['esx:removeInventoryItem']('bread', 0)
 check('inventory events update counts', not fw.hasItems('bread'))
 handlers['esx:setJob']({ name = 'ems', grade = 0 })
 check('job change replaces the group', fw.hasGroup('ems') and not fw.hasGroup('police'))
+
+check('esx has no citizen id or job type', fw.citizenId and fw.citizenId() == nil and fw.jobType() == nil)
+
+-- qb-core keeps citizen id and job type next to the groups
+_G.GetResourceState = function(name) return name == 'qb-core' and 'started' or 'missing' end
+_G.exports = setmetatable({}, { __index = function()
+    return { GetCoreObject = function()
+        return { Functions = { GetPlayerData = function()
+            return { citizenid = 'ABC', job = { name = 'police', type = 'leo', grade = { level = 1 } }, gang = { name = 'none', grade = { level = 0 } } }
+        end } }
+    end }
+end })
+fw = boot()
+check('qb: citizen id and job type are known', fw.citizenId and fw.citizenId() == 'ABC' and fw.jobType() == 'leo')
+handlers['QBCore:Player:SetPlayerData']({ citizenid = 'XYZ', job = { name = 'ems', type = 'medic', grade = { level = 0 } } })
+check('qb: they follow the player data', fw.citizenId and fw.citizenId() == 'XYZ' and fw.jobType() == 'medic')
+_G.exports = setmetatable({}, { __index = function() return { getSharedObject = function() return { PlayerLoaded = false } end } end })
 
 -- ox_inventory answers item questions when it runs
 _G.GetResourceState = function(name) return (name == 'es_extended' or name == 'ox_inventory') and 'started' or 'missing' end
@@ -100,6 +122,7 @@ local okBoot = pcall(boot)
 _G.print = realPrint
 check('a throwing adapter does not abort loading', okBoot and warned == true)
 check('after a failed adapter nothing is filtered', EFT.Framework.name == nil and EFT.Framework.hasGroup('police'))
+check('after a failed adapter no identity is left', EFT.Framework.citizenId and EFT.Framework.citizenId() == nil and EFT.Framework.jobType() == nil)
 
 for i = #saved, 1, -1 do _G[saved[i][1]] = saved[i][2] end
 harness.resetEFT()

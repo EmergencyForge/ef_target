@@ -176,7 +176,10 @@ local function drawList(checked, playerCoords)
         if point.visible and point.clear then list[#list + 1] = point end
     end
     for _, zone in ipairs(EFT.Registry.zoneGrid:near(playerCoords, Config.RayLength)) do
-        local distance = #(zone.center - playerCoords)
+        local center = zone.center
+        -- The centre of a zone without height limits says nothing about how far up the player stands
+        if zone.openHeight then center = vec3(center.x, center.y, playerCoords.z) end
+        local distance = #(center - playerCoords)
         if zone.drawSprite ~= false and anyStatic(zone.options, distance, menu) then
             list[#list + 1] = { key = 'zone:' .. zone.id, coords = zone.center, distance = distance, noSnap = true, visible = true }
         end

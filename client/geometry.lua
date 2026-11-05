@@ -42,7 +42,8 @@ function Geometry.inPoly(zone, p)
     return inside
 end
 
--- Sets center, the bounding sphere radius and kind; the grid and the broad phase only look at these
+-- Sets center, kind, the bounding sphere radius and flatRadius, the same in XY: cells have no height,
+-- so a tall zone would cover hundreds of them through its sphere
 function Geometry.prepare(zone)
     if zone.points then
         local n, sx, sy, sz = #zone.points, 0.0, 0.0, 0.0
@@ -54,13 +55,16 @@ function Geometry.prepare(zone)
             far = math.max(far, dx * dx + dy * dy)
         end
         zone.kind, zone.center, zone.radius = 'poly', center, math.sqrt(far + half * half)
+        zone.flatRadius = math.sqrt(far)
     elseif zone.size then
         local s = zone.size
         zone.kind, zone.center = 'box', zone.coords
         zone.radius = math.sqrt(s.x * s.x + s.y * s.y + s.z * s.z) / 2
+        zone.flatRadius = math.sqrt(s.x * s.x + s.y * s.y) / 2
     else
         zone.kind, zone.center = 'sphere', zone.coords
         zone.radius = zone.radius or 1.0
+        zone.flatRadius = zone.radius
     end
     return zone
 end
@@ -77,7 +81,7 @@ function Geometry.grid()
 end
 
 function Grid:add(zone)
-    local x0, x1, y0, y1 = cellRange(zone.center.x, zone.center.y, zone.radius)
+    local x0, x1, y0, y1 = cellRange(zone.center.x, zone.center.y, zone.flatRadius)
     local keys = {}
     for cx = x0, x1 do
         for cy = y0, y1 do

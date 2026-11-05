@@ -3,7 +3,7 @@ local Select = {}
 EFT.Select = Select
 
 -- Fields that are internals or already acted upon, the receiving resource does not need them
-local dropped = { 'icon', 'iconColor', 'groups', 'items', 'anyItem', 'canInteract', 'onSelect', 'export', 'event', 'serverEvent', 'command', 'source' }
+local dropped = { 'icon', 'iconColor', 'groups', 'items', 'anyItem', 'canInteract', 'onSelect', 'export', 'event', 'serverEvent', 'command', 'source', 'guard', 'qbInteract' }
 
 function Select.response(option, target, server, row)
     local response = {}

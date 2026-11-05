@@ -41,5 +41,11 @@ check('removed zone is gone', #g:near(vec3(0, 0, 0), 150.0) == 1)
 
 check('prepare tags the kind', farZone.kind == 'sphere' and nearZone.kind == 'box' and G.prepare(poly).kind == 'poly')
 check('poly hull covers every corner', poly.radius >= 2.83 and poly.center.x == 2)
+local tall = G.prepare({ coords = vec3(0, 0, 0), size = vec3(2, 2, 900) })
+local tallGrid = G.grid()
+tallGrid:add(tall)
+check('height does not widen the cells of a zone', #tallGrid.owned[tall] <= 4)
+check('a tall zone is found at its top', #tallGrid:near(vec3(0, 0, 440), 0.0) == 1)
+check('a tall zone stays away from the side', #tallGrid:near(vec3(200, 0, 0), 0.0) == 0)
 
 harness.resetEFT()

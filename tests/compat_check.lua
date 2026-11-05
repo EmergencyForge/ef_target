@@ -36,9 +36,26 @@ local function loadCompat()
     _G.AddEventHandler = nil
 end
 
+local playerData
+local function bootFramework(name)
+    _G.GetResourceState = function(resource) return resource == name and 'started' or 'missing' end
+    _G.RegisterNetEvent = function() end
+    _G.exports = {
+        ['qb-core'] = { GetCoreObject = function()
+            return { Functions = { GetPlayerData = function() return playerData end } }
+        end },
+        es_extended = { getSharedObject = function() return { PlayerLoaded = true, PlayerData = playerData } end },
+    }
+    for _, file in ipairs({ 'esx', 'qb', 'ox', 'init' }) do harness.load('client/framework/' .. file .. '.lua') end
+    _G.GetResourceState, _G.RegisterNetEvent, _G.exports = nil, nil, nil
+end
+
+harness.load('config.lua')
 harness.load('client/eft.lua')
 harness.load('client/geometry.lua')
 harness.load('client/registry.lua')
+bootFramework('none')
+harness.load('client/filter.lua')
 loadCompat()
 local R = EFT.Registry
 
@@ -192,10 +209,133 @@ check('qb removes entities of both kinds', not optionsForLocal(1) and not R.opti
 
 check('hash options are folded in', #convert({ options = { x = { label = 'X' } } }) == 1)
 check('required_item counts as item', convert({ options = { { label = 'R', required_item = 'bag' } } })[1].items == 'bag')
+check('required_item wins over item', convert({ options = { { label = 'R', item = 'a', required_item = 'b' } } })[1].items == 'b')
 local given = { label = 'keep', action = print }
 convert({ options = { given } })
 check('convert leaves the given option alone', given.action == print and given.onSelect == nil)
-check('an option keeps its own distance', convert({ distance = 1.0, options = { { label = 'D', distance = 5.0 } } })[1].distance == 5.0)
+
+-- Distance: the outer value is a ceiling
+local function distanceOf(outer, inner)
+    return convert({ distance = outer, options = { { label = 'D', distance = inner } } })[1].distance
+end
+check('the outer distance caps a larger option', distanceOf(1.0, 5.0) == 1.0)
+check('a smaller option keeps its distance', distanceOf(5.0, 1.0) == 1.0)
+check('an option without distance takes the outer one', distanceOf(3.0, nil) == 3.0)
+check('the outer distance defaults to the configured one', distanceOf(nil, nil) == Config.DefaultDistance)
+check('the default outer distance caps too', distanceOf(nil, 50.0) == Config.DefaultDistance)
+
+-- Empty option lists are fine in qb, there is just nothing to register
+check('convert takes an empty list', #convert({ options = {} }) == 0)
+check('convert takes a missing list', pcall(convert, {}))
+for name, call in pairs({
+    AddTargetModel = function() qb.AddTargetModel('empty', { options = {} }) end,
+    AddTargetEntity = function() qb.AddTargetEntity(8, { options = {} }) end,
+    AddTargetBone = function() qb.AddTargetBone('bone', { options = {} }) end,
+    AddGlobalPed = function() qb.AddGlobalPed({ options = {} }) end,
+    Ped = function() qb.Ped({ options = {} }) end,
+    AddBoxZone = function() qb.AddBoxZone('e', vec3(0, 0, 0), 1.0, 1.0, {}, { options = {} }) end,
+    AddPolyZone = function() qb.AddPolyZone('e', { vec3(0, 0, 0), vec3(1, 0, 0), vec3(0, 1, 0) }, {}, { options = {} }) end,
+    AddCircleZone = function() qb.AddCircleZone('e', vec3(0, 0, 0), 1.0, {}, { options = {} }) end,
+    AddEntityZone = function() qb.AddEntityZone('e', 8, {}, { options = {} }) end,
+}) do
+    check(name .. ' tolerates an empty list', pcall(call))
+end
+check('an empty list registers nothing', not optionsForModel('empty') and not optionsForLocal(8) and not R.zoneExists('e'))
+
+-- Fields that decide who sees an option, always against the qb rules
+local function shown(raw)
+    raw.label = raw.label or 'Guarded'
+    return EFT.Filter.static(convert({ options = { raw } })[1], 1.0, nil)
+end
+
+playerData = {
+    citizenid = 'ABC',
+    job = { name = 'police', type = 'leo', grade = { level = 2 } },
+    gang = { name = 'ballas', grade = { level = 1 } },
+    items = {},
+}
+bootFramework('qb-core')
+check('gang only: the member sees it', shown({ gang = 'ballas' }))
+check('gang only: others do not', not shown({ gang = 'vagos' }))
+check('gang grade map: at the grade', shown({ gang = { ballas = 1 } }))
+check('gang grade map: below the grade', not shown({ gang = { ballas = 2 } }))
+check('job and gang: both met', shown({ job = 'police', gang = 'ballas' }))
+check('job and gang: job alone is not enough', not shown({ job = 'police', gang = 'vagos' }))
+check('job and gang: gang alone is not enough', not shown({ job = 'ems', gang = 'ballas' }))
+check('citizenid string: match', shown({ citizenid = 'ABC' }))
+check('citizenid string: no match', not shown({ citizenid = 'XYZ' }))
+check('citizenid table: match', shown({ citizenid = { ABC = true, XYZ = true } }))
+check('citizenid table: no match', not shown({ citizenid = { XYZ = true } }))
+check('excludejob hides the job', not shown({ excludejob = 'police' }))
+check('excludejob leaves others', shown({ excludejob = 'ems' }))
+check('excludejob map hides from the grade up', not shown({ excludejob = { police = 2 } }))
+check('excludejob map leaves lower grades', shown({ excludejob = { police = 3 } }))
+check('excludejob all hides from everyone', not shown({ excludejob = 'all' }))
+check('excludegang hides the gang', not shown({ excludegang = 'ballas' }))
+check('excludegang leaves others', shown({ excludegang = 'vagos' }))
+check('excludegang all hides from everyone', not shown({ excludegang = 'all' }))
+check('jobType: match', shown({ jobType = 'leo' }))
+check('jobType: no match', not shown({ jobType = 'medic' }))
+check('jobType table: match', shown({ jobType = { leo = true } }))
+check('jobType table: no match', not shown({ jobType = { medic = true } }))
+check('jobType all passes', shown({ jobType = 'all' }))
+check('excludejobType hides the type', not shown({ excludejobType = 'leo' }))
+check('excludejobType leaves others', shown({ excludejobType = 'medic' }))
+check('excludejobType table hides the type', not shown({ excludejobType = { leo = true } }))
+check('excludejobType all hides from everyone', not shown({ excludejobType = 'all' }))
+check('a guard adds to items', not shown({ gang = 'ballas', item = 'missing' }))
+
+-- 'all' is no requirement
+check('job all passes', shown({ job = 'all' }))
+check('gang all passes', shown({ gang = 'all' }))
+check('job all leaves no group behind', convert({ options = { { label = 'A', job = 'all' } } })[1].groups == nil)
+check('gang all needs no guard', convert({ options = { { label = 'A', gang = 'all' } } })[1].guard == nil)
+check('an all entry in an array goes', shown({ job = { 'all' } }))
+check('an all key in a map goes', shown({ job = { all = 0 } }))
+local mapped = convert({ options = { { label = 'A', job = { all = 0, police = 3 } } } })[1]
+check('grades next to an all key stay', mapped.groups.police == 3 and mapped.groups.all == nil)
+check('and they still count', not shown({ job = { all = 0, police = 3 } }) and shown({ job = { all = 0, police = 2 } }))
+check('an all entry leaves the other array entries', convert({ options = { { label = 'A', job = { 'all', 'police' } } } })[1].groups[1] == 'police')
+check('gang grades next to an all key stay', not shown({ gang = { all = 0, ballas = 2 } }) and shown({ gang = { all = 0, ballas = 1 } }))
+local jobAll = { label = 'A', job = { all = 0 } }
+convert({ options = { jobAll } })
+check('dropping all leaves the given table alone', jobAll.job.all == 0)
+
+-- No answer from the framework hides an option, unlike groups and items
+bootFramework('none')
+check('no framework: citizenid stays hidden', not shown({ citizenid = 'ABC' }))
+check('no framework: citizenid table stays hidden', not shown({ citizenid = { ABC = true } }))
+check('no framework: gang stays hidden', not shown({ gang = 'ballas' }))
+check('no framework: jobType stays hidden', not shown({ jobType = 'leo' }))
+check('no framework: excludejob stays hidden', not shown({ excludejob = 'ems' }))
+check('no framework: excludegang stays hidden', not shown({ excludegang = 'vagos' }))
+check('no framework: excludejobType stays hidden', not shown({ excludejobType = 'medic' }))
+check('no framework: plain job follows the groups rule', shown({ job = 'police' }))
+check('no framework: all stays open', shown({ job = 'all', gang = 'all', jobType = 'all' }))
+playerData = { job = { name = 'police', grade = 2 }, inventory = {} }
+bootFramework('es_extended')
+check('esx knows no citizenid', not shown({ citizenid = 'ABC' }))
+check('esx knows no job type', not shown({ jobType = 'leo' }) and not shown({ excludejobType = 'medic' }))
+check('esx knows no gang', not shown({ gang = 'ballas' }))
+bootFramework('none')
+
+-- canInteract arguments
+local seen
+local asked = convert({ options = { { label = 'Ask', canInteract = function(...) seen = { ... }; return true end } } })[1]
+EFT.Filter.force(asked, { entity = 1, distance = 2.0, coords = vec3(0, 0, 0), bone = 'b' })
+check('qb canInteract gets entity and distance', seen[1] == 1 and seen[2] == 2.0)
+check('qb canInteract gets the option third', seen[3] == asked and seen[4] == nil)
+
+-- Commands through QBCore
+local sentEvent = {}
+natives.TriggerServerEvent = function(...) sentEvent = { ... } end
+local command = convert({ options = { { label = 'Cmd', event = 'mycmd', type = 'qbcommand' } } })[1]
+check('qbcommand fires no local event', command.event == nil and command.serverEvent == nil and command.type == nil)
+pcall(command.onSelect, 12)
+check('qbcommand goes through QBCore', sentEvent[1] == 'QBCore:CallCommand' and sentEvent[2] == 'mycmd')
+check('qbcommand sends the option data', sentEvent[3] ~= nil and sentEvent[3].label == 'Cmd' and sentEvent[3].entity == 12)
+check('an action wins over a qbcommand', convert({ options = { { label = 'A', action = print, event = 'x', type = 'qbcommand' } } })[1].onSelect == print)
+natives.TriggerServerEvent = function(name, netId) reported[#reported + 1] = name .. ':' .. tostring(netId) end
 
 qb.AddGlobalPed({ options = { { label = 'P' } } })
 check('qb global names exist', #entriesFor(1) == 1)
@@ -234,10 +374,96 @@ check('qb entity zones sit on the entity', optionsForLocal(3)[1].label == 'EZ')
 qb.RemoveZone('ez')
 check('qb RemoveZone clears entity zones', not optionsForLocal(3))
 
-for _, name in ipairs({ 'AddBoxZone', 'AddPolyZone', 'AddCircleZone', 'RemoveZone', 'AddTargetBone', 'AddTargetEntity',
-    'RemoveTargetEntity', 'AddTargetModel', 'RemoveTargetModel', 'Ped', 'Vehicle', 'Object', 'Player', 'RemovePed',
-    'RemoveVehicle', 'RemoveObject', 'RemovePlayer', 'AddGlobalPed', 'AddGlobalVehicle', 'AddGlobalObject',
-    'AddGlobalPlayer', 'AddEntityZone' }) do
+-- Global lists without labels are wiped, the built-in points are not qb's to take
+for _, kind in ipairs({ 'Ped', 'Vehicle', 'Object', 'Player' }) do
+    local key = kind:lower()
+    R.add('global', key, { label = 'Builtin' }, 'ef_target')
+    qb['AddGlobal' .. kind]({ options = { { label = 'One' } } })
+    invoking = 'res_other'
+    qb['AddGlobal' .. kind]({ options = { { label = 'Two' } } })
+    invoking = 'res_caller'
+    qb['RemoveGlobal' .. kind]()
+    local left = R.optionsOf('global', key)
+    check('RemoveGlobal' .. kind .. ' wipes the list', #left == 1 and left[1].label == 'Builtin')
+    R.removeKey('global', key)
+end
+
+-- Bones have their own way back
+qb.AddTargetBone({ 'bone_a', 'bone_b' }, { options = { { label = 'First' }, { label = 'Second' } } })
+R.add('global', 'vehicle', { label = 'Door' }, 'ef_target', { anchor = { bone = 'bone_a' } })
+local function boneLabels(bone)
+    local out = {}
+    for _, entry in ipairs(entriesFor(2)) do
+        if entry.anchor.bone == bone then out[#out + 1] = entry.options[1].label end
+    end
+    table.sort(out)
+    return table.concat(out, ',')
+end
+pcall(qb.RemoveTargetBone, 'bone_a', 'First')
+check('RemoveTargetBone takes the label off that bone', boneLabels('bone_a') == 'Door,Second')
+check('the other bones keep the label', boneLabels('bone_b') == 'First,Second')
+pcall(qb.RemoveTargetBone, { 'bone_b' }, { 'First', 'Second' })
+check('RemoveTargetBone takes label lists', boneLabels('bone_b') == '')
+pcall(qb.RemoveTargetBone, 'bone_a')
+check('RemoveTargetBone without labels clears the bone', boneLabels('bone_a') == 'Door')
+R.removeKey('global', 'vehicle')
+
+-- Names are unique in qb, not in ox
+local oxFirst = ox.addSphereZone({ name = 'shop', coords = vec3(0, 0, 0), options = { label = 'A' } })
+local oxSecond = ox.addSphereZone({ name = 'shop', coords = vec3(100, 0, 0), options = { label = 'B' } })
+check('ox zones may share a name', R.zones[oxFirst] and R.zones[oxSecond] and ox.zoneExists('shop'))
+ox.removeZone('shop')
+check('ox removes every zone of a name', not R.zones[oxFirst] and not R.zones[oxSecond] and not ox.zoneExists('shop'))
+oxFirst = efExports.AddSphereZone({ name = 'own', coords = vec3(0, 0, 0), options = { label = 'A' } })
+oxSecond = efExports.AddSphereZone({ name = 'own', coords = vec3(100, 0, 0), options = { label = 'B' } })
+check('own zones may share a name', R.zones[oxFirst] and R.zones[oxSecond])
+efExports.Remove(oxFirst)
+check('an id removes just its zone', not R.zones[oxFirst] and R.zones[oxSecond] and R.zoneExists('own'))
+efExports.Remove(oxSecond)
+check('the last zone of a name frees it', not R.zoneExists('own'))
+local qbFirst = qb.AddCircleZone('door', vec3(0, 0, 0), 1.0, {}, { options = { { label = 'A' } } })
+local qbSecond = qb.AddBoxZone('door', vec3(0, 0, 0), 1.0, 1.0, {}, { options = { { label = 'B' } } })
+check('a qb name replaces the zone before it', not R.zones[qbFirst] and R.zones[qbSecond])
+qbFirst = qb.AddPolyZone('door', { vec3(0, 0, 0), vec3(1, 0, 0), vec3(0, 1, 0) }, {}, { options = { { label = 'C' } } })
+check('qb poly zones replace too', not R.zones[qbSecond] and R.zones[qbFirst])
+qb.AddEntityZone('door', 9, {}, { options = { { label = 'D' } } })
+check('an entity zone replaces a zone', not R.zones[qbFirst] and optionsForLocal(9)[1].label == 'D')
+qbSecond = qb.AddCircleZone('door', vec3(0, 0, 0), 1.0, {}, { options = { { label = 'E' } } })
+check('a zone replaces an entity zone', not optionsForLocal(9) and R.zones[qbSecond])
+qb.RemoveZone('door')
+
+-- Open height zones
+zone = R.zones[qb.AddBoxZone('tall', vec3(0, 0, 40), 4.0, 4.0, {}, { options = { { label = 'T' } } })]
+check('an open box says so', zone.openHeight == true)
+check('an open box stays in the cells of its footprint', #R.zoneGrid.owned[zone] <= 4)
+check('an open box is still found high up', #R.zoneGrid:near(vec3(0, 0, 400), 0.0) == 1)
+qb.RemoveZone('tall')
+zone = R.zones[qb.AddBoxZone('half', vec3(0, 0, 40), 4.0, 4.0, { minZ = 39.0 }, { options = { { label = 'T' } } })]
+check('one bound leaves the height open', zone.openHeight == true and zone.center.z == 40.0)
+qb.RemoveZone('half')
+zone = R.zones[qb.AddBoxZone('closed', vec3(0, 0, 40), 4.0, 4.0, { minZ = 39.0, maxZ = 42.0 }, { options = { { label = 'T' } } })]
+check('a bounded box is not open', not zone.openHeight)
+qb.RemoveZone('closed')
+zone = R.zones[qb.AddPolyZone('tallpoly', { vec3(0, 0, 40), vec3(4, 0, 40), vec3(0, 4, 40) }, {}, { options = { { label = 'T' } } })]
+check('an open poly stays around its points', zone.openHeight == true and zone.center.z == 40.0 and #R.zoneGrid.owned[zone] <= 4)
+qb.RemoveZone('tallpoly')
+zone = R.zones[qb.AddPolyZone('flat', { { x = 0, y = 0 }, { x = 4, y = 0 }, { x = 0, y = 4 } }, {}, { options = { { label = 'T' } } })]
+check('an open poly copes with points without a height', zone.center.z == 0.0)
+qb.RemoveZone('flat')
+
+-- A netId that exists has no handle yet while its entity is out of scope
+handleOf[57] = 0
+ox.addEntity(57, { label = 'Scope' })
+check('an entity out of scope is keyed by netId', hasNet(57))
+check('nothing lands on handle 0', not optionsForLocal(0))
+handleOf[57] = nil
+ox.removeEntity(57)
+
+for _, name in ipairs({ 'AddBoxZone', 'AddPolyZone', 'AddCircleZone', 'RemoveZone', 'AddTargetBone', 'RemoveTargetBone',
+    'AddTargetEntity', 'RemoveTargetEntity', 'AddTargetModel', 'RemoveTargetModel', 'Ped', 'Vehicle', 'Object', 'Player',
+    'RemovePed', 'RemoveVehicle', 'RemoveObject', 'RemovePlayer', 'AddGlobalPed', 'AddGlobalVehicle', 'AddGlobalObject',
+    'AddGlobalPlayer', 'RemoveGlobalPed', 'RemoveGlobalVehicle', 'RemoveGlobalObject', 'RemoveGlobalPlayer',
+    'AddEntityZone' }) do
     check('qb-target and qtarget export ' .. name, type(qb[name]) == 'function' and qtarget[name] == qb[name])
 end
 for _, name in ipairs({ 'addPolyZone', 'addBoxZone', 'addSphereZone', 'zoneExists', 'removeZone', 'addGlobalPed',

@@ -19,6 +19,7 @@ local function build(getData)
             end
             fw.setGroups(groups)
             fw.setItems(items)
+            fw.setIdentity(data.citizenid, data.job and data.job.type)
         end
 
         setData(getData())

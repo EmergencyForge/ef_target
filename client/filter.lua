@@ -10,12 +10,18 @@ function Filter.static(option, distance, menu)
     if distance > (option.distance or Config.DefaultDistance) then return false end
     if option.groups and not EFT.Framework.hasGroup(option.groups) then return false end
     if option.items and not EFT.Framework.hasItems(option.items, option.anyItem) then return false end
+    if option.guard and not option.guard() then return false end
     return true
 end
 
 function Filter.force(option, ctx)
     if not option.canInteract then return true end
-    local ok, result = pcall(option.canInteract, ctx.entity, ctx.distance, ctx.coords, option.name, ctx.bone)
+    local ok, result
+    if option.qbInteract then
+        ok, result = pcall(option.canInteract, ctx.entity, ctx.distance, option)
+    else
+        ok, result = pcall(option.canInteract, ctx.entity, ctx.distance, ctx.coords, option.name, ctx.bone)
+    end
     return ok and result and true or false
 end
 

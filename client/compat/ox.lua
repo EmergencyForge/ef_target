@@ -120,13 +120,10 @@ function api.removeModel(models, names)
     removeFrom('model', hashes, names, caller())
 end
 
--- Registry.addEntity keys by netId again and tells the server, which a plain add would skip
 function api.addEntity(netIds, options)
     local resource = caller()
     for _, netId in ipairs(list(netIds)) do
-        if NetworkDoesNetworkIdExist(netId) then
-            Registry.addEntity(NetworkGetEntityFromNetworkId(netId), options, resource)
-        end
+        if NetworkDoesNetworkIdExist(netId) then Registry.addNetId(netId, options, resource) end
     end
 end
 

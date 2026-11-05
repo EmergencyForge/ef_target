@@ -3,12 +3,17 @@ local fw = EFT.Framework
 fw.adapters = fw.adapters or {}
 
 local groups, items, itemLookup, groupCheck = {}, {}, nil, nil
+local citizenId, jobType
 fw.name = nil
 
 function fw.setGroups(tbl) groups = tbl end
 function fw.setItems(tbl) items = tbl end
 function fw.setItemLookup(fn) itemLookup = fn end
 function fw.setGroupCheck(fn) groupCheck = fn end
+function fw.setIdentity(id, kind) citizenId, jobType = id, kind end
+-- Only qb-core and Qbox know these, nil means the framework has no answer
+function fw.citizenId() return citizenId end
+function fw.jobType() return jobType end
 
 -- Turns a string, an array or a { name = value } table into name/value pairs
 local function pairsOf(filter, default)
@@ -56,6 +61,7 @@ for _, name in ipairs({ 'ox_core', 'es_extended', 'qbx_core', 'qb-core' }) do
             print(('ef_target: framework adapter %s failed: %s'):format(name, tostring(err)))
             fw.name = nil
             groups, items, groupCheck = {}, {}, nil
+            citizenId, jobType = nil, nil
         end
         break
     end

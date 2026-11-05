@@ -100,6 +100,13 @@ check('removeZone on a missing zone is false', R.removeZone('z1') == false)
 local z2 = R.addZone({ coords = vec3(0, 0, 0), size = vec3(2, 2, 2), options = { label = 'B' } }, 'res_z')
 onStop('res_z')
 check('onResourceStop drops zones too', not R.zoneExists(z2))
+local twinA = R.addZone({ name = 'twin', coords = vec3(0, 0, 0), radius = 1.0, options = { label = 'A' } }, 'res_a')
+local twinB = R.addZone({ name = 'twin', coords = vec3(0, 0, 0), radius = 1.0, options = { label = 'B' } }, 'res_b')
+check('a name can hold several zones', R.zoneExists(twinA) and R.zoneExists(twinB))
+R.removeResource('res_a')
+check('a stopping resource takes only its twin', not R.zoneExists(twinA) and R.zoneExists('twin'))
+R.addZone({ name = 'twin', coords = vec3(0, 0, 0), radius = 1.0, options = { label = 'C' } }, 'res_b')
+check('removing by name takes all of them', R.removeZone('twin') and not R.zoneExists('twin') and not R.zoneExists(twinB))
 
 local tracked = {}
 -- Only labels from the entity and local buckets, global leftovers from earlier checks do not count

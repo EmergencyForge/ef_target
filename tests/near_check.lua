@@ -564,6 +564,26 @@ world[ped].coords = vec3(0, 0, 0)
 release()
 pump(2)
 R.removeZone(gated)
+
+-- A zone without height limits sits far above or below the player, only the horizontal reach says anything
+local openZone = R.addZone({ coords = vec3(-1, 0, 200), size = vec3(2, 2, 900), openHeight = true, options = { { label = 'Offen' } } }, 'res')
+press()
+scans(2)
+check('an open height zone has its marker in horizontal reach', #drawn == 1 and drawn[1].noSnap)
+world[ped].coords = vec3(-15, 0, 0)
+scans(2)
+check('an open height zone still ends at its horizontal reach', #drawn == 0)
+world[ped].coords = vec3(0, 0, 0)
+release()
+pump(2)
+R.removeZone(openZone)
+local closedZone = R.addZone({ coords = vec3(-1, 0, 200), size = vec3(2, 2, 900), options = { { label = 'Hoch' } } }, 'res')
+press()
+scans(2)
+check('a zone with a height keeps measuring in three dimensions', #drawn == 0)
+release()
+pump(2)
+R.removeZone(closedZone)
 threads = {}
 
 -- Input: the session and its controls

@@ -66,6 +66,9 @@ _G.print = realPrint
 check('a throwing onSelect closes cleanly', outcome == 'closed')
 check('the warning names the option', warned ~= nil and warned:find('boomer', 1, true) ~= nil)
 
+local internals = S.response({ label = 'x', guard = print, qbInteract = true }, { entity = 7 }, false)
+check('compat internals stay out of the response', internals.guard == nil and internals.qbInteract == nil)
+
 row = { option = { qtarget = true, onSelect = function(a) ran = a end } }
 S.run(row, { entity = 7 }, state); check('qtarget gets the entity itself', ran == 7)
 row = { option = { onSelect = function(a) ran = a end, label = 'R' } }

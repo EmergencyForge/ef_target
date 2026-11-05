@@ -49,19 +49,39 @@ local function purge(fn, onlyKind, onlyKey)
     return changed
 end
 
+local function setOf(values)
+    if type(values) ~= 'table' then values = { values } end
+    local set = {}
+    for _, value in ipairs(values) do set[value] = true end
+    return set
+end
+
+-- The purge answer for an entry that loses the named options
+local function withoutNames(entry, drop)
+    local left = {}
+    for _, option in ipairs(entry.options) do
+        if not (option.name ~= nil and drop[option.name]) then left[#left + 1] = option end
+    end
+    if #left == #entry.options then return true end
+    entry.options = left
+    return #left > 0, true
+end
+
 function Registry.removeNames(kind, key, names, resource)
-    if type(names) ~= 'table' then names = { names } end
-    local drop = {}
-    for _, name in ipairs(names) do drop[name] = true end
+    local drop = setOf(names)
     purge(function(entry)
         if resource ~= nil and entry.resource ~= resource then return true end
-        local left = {}
-        for _, option in ipairs(entry.options) do
-            if not (option.name ~= nil and drop[option.name]) then left[#left + 1] = option end
-        end
-        if #left == #entry.options then return true end
-        entry.options = left
-        return #left > 0, true
+        return withoutNames(entry, drop)
+    end, kind, key)
+end
+
+-- Entries on the given bones, all of them or only the named options. The entries of keep stay.
+function Registry.removeBones(kind, key, bones, names, keep)
+    local wanted, drop = setOf(bones), names and setOf(names)
+    purge(function(entry)
+        if entry.resource == keep or not (entry.anchor and wanted[entry.anchor.bone]) then return true end
+        if not drop then return false end
+        return withoutNames(entry, drop)
     end, kind, key)
 end
 
@@ -141,17 +161,21 @@ end
 -- The server is told about networked ones so it can announce their deletion.
 function Registry.addEntity(entity, options, resource, extra)
     if NetworkGetEntityIsNetworked(entity) then
-        local netId = NetworkGetNetworkIdFromEntity(entity)
-        TriggerServerEvent('ef_target:trackEntity', netId)
-        -- The server may not know a fresh entity yet and drops the first report, it dedupes the second
-        SetTimeout(2000, function() TriggerServerEvent('ef_target:trackEntity', netId) end)
-        return Registry.add('entity', netId, options, resource, extra)
+        return Registry.addNetId(NetworkGetNetworkIdFromEntity(entity), options, resource, extra)
     end
     return Registry.add('local', entity, options, resource, extra)
 end
 
-function Registry.removeKey(kind, key)
-    purge(function() return false end, kind, key)
+function Registry.addNetId(netId, options, resource, extra)
+    TriggerServerEvent('ef_target:trackEntity', netId)
+    -- The server may not know a fresh entity yet and drops the first report, it dedupes the second
+    SetTimeout(2000, function() TriggerServerEvent('ef_target:trackEntity', netId) end)
+    return Registry.add('entity', netId, options, resource, extra)
+end
+
+-- The entries of keep stay: a script clearing a list must not take the built-in points along
+function Registry.removeKey(kind, key, keep)
+    purge(function(entry) return keep ~= nil and entry.resource == keep end, kind, key)
 end
 
 function Registry.removeEntities(netIds)
@@ -261,30 +285,40 @@ function Registry.addZone(zone, resource)
     -- Scripts also pass vector4 and plain tables, and the scan does vector math on the centre
     local c = zone.coords
     if c then copy.coords = vec3(c.x or c[1], c.y or c[2], c.z or c[3]) end
-    if copy.name ~= nil and zonesByName[copy.name] then Registry.removeZone(copy.name) end
     copy.id, copy.resource = newId(), resource
 
     Registry.zoneGrid:add(EFT.Geometry.prepare(copy))
     Registry.zones[copy.id] = copy
-    if copy.name ~= nil then zonesByName[copy.name] = copy.id end
+    if copy.name ~= nil then
+        zonesByName[copy.name] = zonesByName[copy.name] or {}
+        zonesByName[copy.name][copy.id] = true
+    end
     bump()
     return copy.id
 end
 
-local function findZone(idOrName)
-    return Registry.zones[idOrName] or Registry.zones[zonesByName[idOrName]]
-end
-
 function Registry.zoneExists(idOrName)
-    return findZone(idOrName) ~= nil
+    return Registry.zones[idOrName] ~= nil or zonesByName[idOrName] ~= nil
 end
 
-function Registry.removeZone(idOrName)
-    local zone = findZone(idOrName)
-    if not zone then return false end
+local function dropZone(zone)
     Registry.zoneGrid:remove(zone)
     Registry.zones[zone.id] = nil
-    if zone.name ~= nil then zonesByName[zone.name] = nil end
+    if zone.name == nil then return end
+    local ids = zonesByName[zone.name]
+    ids[zone.id] = nil
+    if next(ids) == nil then zonesByName[zone.name] = nil end
+end
+
+-- A name stands for every zone that carries it, ox scripts reuse one name in a loop
+function Registry.removeZone(idOrName)
+    local zone, ids = Registry.zones[idOrName], zonesByName[idOrName]
+    if not zone and not ids then return false end
+    if zone then
+        dropZone(zone)
+    else
+        for id in pairs(ids) do dropZone(Registry.zones[id]) end
+    end
     bump()
     return true
 end
