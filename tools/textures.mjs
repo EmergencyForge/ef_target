@@ -1,5 +1,5 @@
-// Writes assets/ring.png, fill.png and edge.png. Run from the repo root: node tools/textures.mjs
-// Each is a 64 x 64 white (ring, fill) or black (edge) square shape. The in-game sprite rotates it 45 degrees into a diamond.
+// Writes assets/ring.png, fill.png, halo.png and edge.png. Run from the repo root: node tools/textures.mjs
+// Each is a 64 x 64 white (ring, fill, halo) or black (edge) square shape. The in-game sprite rotates it 45 degrees into a diamond.
 import { deflateSync } from 'node:zlib'
 import { mkdirSync, writeFileSync } from 'node:fs'
 
@@ -62,4 +62,5 @@ const stroke = (width) => (dx, dy) => Math.abs(cheb(dx, dy) - HALF) <= width / 2
 mkdirSync('assets', { recursive: true })
 writeFileSync('assets/ring.png', render(stroke(6), 255))
 writeFileSync('assets/fill.png', render((dx, dy) => cheb(dx, dy) <= HALF + 3, 255))
+writeFileSync('assets/halo.png', render(stroke(2), 255))
 writeFileSync('assets/edge.png', render(stroke(12), 0))

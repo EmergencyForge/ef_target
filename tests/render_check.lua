@@ -20,7 +20,8 @@ natives.GetFrameTime = function() return 1 / 60 end
 natives.CreateThread = function() end
 natives.Wait = function() end
 local origins, cleared, sprites = 0, 0, {}
-natives.SetDrawOrigin = function() origins = origins + 1 end
+local drawn = {}
+natives.SetDrawOrigin = function(x) origins = origins + 1; drawn[#drawn + 1] = x end
 natives.ClearDrawOrigin = function() cleared = cleared + 1 end
 natives.DrawSprite = function(_, name, x, y, w, h) sprites[#sprites + 1] = { name = name, x = x, y = y, w = w, h = h } end
 
@@ -51,20 +52,25 @@ check('a long frame does not explode', math.abs(Sp.step({ value = 0, velocity = 
 
 local thirty = {}
 for i = 1, 30 do thirty[i] = { key = 'p' .. i, coords = vec3(i, 0, 0), distance = 31 - i } end
-Render.setPoints(thirty); Render.start()
+Render.start(); Render.setPoints(thirty)
 check('start marks the renderer running', Render.isRunning())
 Render.drawFrame()
 check('draw origins stay below the limit', origins <= Config.MaxPoints + 1)
 check('every origin is cleared', cleared == origins)
 
-origins, cleared = 0, 0
+origins, cleared, drawn = 0, 0, {}
 Render.setAim(thirty[30], true); Render.drawFrame()
-check('the nearest points win the limit', origins == Config.MaxPoints + 1 or origins == Config.MaxPoints)
+local lowest, seen = 99, {}
+for _, x in ipairs(drawn) do lowest = math.min(lowest, x); seen[x] = true end
+check('the nearest points win the limit', #drawn == Config.MaxPoints and lowest == 7 and seen[30] and seen[7])
 check('every origin is cleared with an aim', cleared == origins)
 
 sprites = {}
 Render.setPoints({ thirty[1] }); Render.setAim({ key = 'x', coords = vec3(0, 0, 0) }, true); Render.drawFrame()
 local first = sprites[1]
+local haloSeen = false
+for _, sp in ipairs(sprites) do if sp.name == 'halo' then haloSeen = true end end
+check('a hit draws the thin halo', haloSeen)
 check('sprite height follows the aspect ratio', math.abs(first.h / first.w - 16 / 9) < 1e-6)
 
 sprites = {}
@@ -75,6 +81,60 @@ Render.setPoints({}); Render.setAim(nil, false)
 check('nothing visible stops the thread', not Render.needsFrame())
 Render.stop()
 check('stop ends the renderer', not Render.isRunning())
+
+-- A fresh module per case, its texture and thread state is local
+local function fresh()
+    harness.load('client/render.lua')
+    return EFT.Render
+end
+
+local lines = {}
+local realPrint = print
+_G.print = function(text) lines[#lines + 1] = text end
+local txdCalls = 0
+natives.CreateRuntimeTxd = function() txdCalls = txdCalls + 1; return 1 end
+natives.CreateRuntimeTextureFromImage = function() error('boom') end
+Render = fresh()
+local startOk = pcall(Render.start); pcall(Render.start)
+Render.setPoints({ thirty[1] })
+_G.print = realPrint
+check('a throwing texture load does not raise', startOk)
+check('a failed load never becomes active', not Render.isRunning() and not Render.needsFrame())
+check('a failed load is not retried', txdCalls == 1)
+check('a failed load reports once', #lines == 1)
+
+lines, txdCalls = {}, 0
+natives.CreateRuntimeTextureFromImage = function() return nil end
+Render = fresh()
+_G.print = function(text) lines[#lines + 1] = text end
+startOk = pcall(Render.start); pcall(Render.start)
+_G.print = realPrint
+check('a falsy texture return counts as failure', startOk and not Render.isRunning() and txdCalls == 1 and #lines == 1)
+
+natives.CreateRuntimeTxd = function() return 1 end
+natives.CreateRuntimeTextureFromImage = function() return 1 end
+Render = fresh()
+Render.start(); Render.stop(); Render.setPoints({ thirty[1] }); Render.start()
+check('points set while stopped are ignored', not Render.needsFrame())
+Render.stop()
+
+-- The thread runs inline here, a Wait hook ends it after the springs settled on a hit
+local waits = 0
+natives.CreateThread = function(fn) fn() end
+natives.Wait = function()
+    waits = waits + 1
+    if waits == 60 then Render.setAim(nil, false) end
+end
+Render = fresh()
+Render.start(); Render.setAim({}, true)
+check('the thread ends once nothing is visible', waits == 60 and not Render.needsFrame())
+sprites = {}
+natives.CreateThread = function() end
+Render.setAim({}, false); Render.drawFrame()
+local filled = false
+for _, sp in ipairs(sprites) do if sp.name == 'fill' then filled = true end end
+check('a new aim does not start from the old hit state', not filled)
+Render.stop()
 
 for _, name in ipairs({ 'Config', 'json', 'exports', 'SendNuiMessage', 'AddEventHandler', 'CreateRuntimeTxd',
     'CreateRuntimeTextureFromImage', 'GetAspectRatio', 'GetFrameTime', 'CreateThread', 'Wait', 'SetDrawOrigin',

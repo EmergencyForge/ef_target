@@ -7,7 +7,7 @@ local TXD = 'ef_target'
 local AIM_WIDTH = 0.010
 local POINT_SCALE = 0.7
 local HIT_SCALE = 0.85
-local HALO_SCALE = 1.6
+local HALO_SCALE = 1.8
 local HALO_ALPHA = 0.9
 local REST_ROTATION = 45.0
 local HIT_ROTATION = 135.0
@@ -18,6 +18,7 @@ local aimHit = false
 local active = false
 local threadAlive = false
 local texturesReady = false
+local texturesFailed = false
 local aspect = 16 / 9
 
 -- Rotation and fill follow the hit state, the halo grows from 0.6 to 1 as in the approved preview
@@ -33,13 +34,25 @@ local function resetSprings()
     scale.value, scale.velocity = 1.0, 0.0
 end
 
+-- A missing or unreadable PNG must not take the session down, so a failed load disables drawing for good
 local function loadTextures()
-    if texturesReady then return end
-    local txd = CreateRuntimeTxd(TXD)
-    for _, name in ipairs({ 'ring', 'fill', 'edge' }) do
-        CreateRuntimeTextureFromImage(txd, name, 'assets/' .. name .. '.png')
+    if texturesReady then return true end
+    if texturesFailed then return false end
+    local ok, err = pcall(function()
+        local txd = CreateRuntimeTxd(TXD)
+        for _, name in ipairs({ 'ring', 'fill', 'edge', 'halo' }) do
+            if not CreateRuntimeTextureFromImage(txd, name, 'assets/' .. name .. '.png') then
+                error('could not load assets/' .. name .. '.png')
+            end
+        end
+    end)
+    if not ok then
+        texturesFailed = true
+        print('[ef_target] marker textures failed to load, markers are disabled: ' .. tostring(err))
+        return false
     end
     texturesReady = true
+    return true
 end
 
 local function sprite(name, x, y, width, heading, r, g, b, a)
@@ -63,7 +76,7 @@ local function drawAim(x, y, ar, ag, ab)
     local h = halo.value
     if h > 0.01 then
         if h > 1.0 then h = 1.0 end
-        sprite('ring', x, y, AIM_WIDTH * HALO_SCALE * (0.6 + 0.4 * halo.value), REST_ROTATION, ar, ag, ab,
+        sprite('halo', x, y, AIM_WIDTH * HALO_SCALE * (0.6 + 0.4 * h), REST_ROTATION, ar, ag, ab,
             math.floor(255 * HALO_ALPHA * h))
     end
 end
@@ -104,6 +117,8 @@ end
 local function wake()
     if threadAlive or not Render.needsFrame() then return end
     threadAlive = true
+    -- The last session may have ended on a hit, the next aim must not ease back from it
+    resetSprings()
     CreateThread(function()
         while Render.needsFrame() do
             Render.drawFrame()
@@ -115,6 +130,7 @@ end
 
 -- Nearest points win, SetDrawOrigin allows 32 per frame and the aim marker needs one
 function Render.setPoints(list)
+    if not active then return end
     local sorted = {}
     for i, point in ipairs(list) do sorted[i] = point end
     table.sort(sorted, function(a, b) return (a.distance or 0) < (b.distance or 0) end)
@@ -131,7 +147,7 @@ function Render.setAim(point, hit)
 end
 
 function Render.start()
-    loadTextures()
+    if not loadTextures() then return end
     -- The window can change size between sessions
     aspect = GetAspectRatio(false)
     resetSprings()
