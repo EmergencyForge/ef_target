@@ -1,0 +1,119 @@
+-- show='near' points: visible without a key, the nearest one offers its first option on the use key.
+local Near = {}
+EFT.Near = Near
+
+local TICK_MS = 500
+
+-- Points in reach with an allowed option, and the nearest of them
+local nearby, nearest = {}, nil
+-- Text on the pill, nil while the pill is hidden
+local pillLabel = nil
+local ticking, framing = false, false
+
+local function firstAllowed(point, now)
+    for _, entry in ipairs(point.entries) do
+        local ctx = EFT.Menu.context({ point = point, entry = entry })
+        for _, option in ipairs(entry.options) do
+            if EFT.Filter.static(option, point.distance, nil) and EFT.Filter.interact(option, ctx, now) then
+                return option, entry
+            end
+        end
+    end
+end
+
+function Near.tick(playerCoords, now)
+    nearby = {}
+    if EFT.Session.isActive() or EFT.Session.blocked() then return nil end
+    if GetVehiclePedIsIn(PlayerPedId(), false) ~= 0 then return nil end
+
+    local Scan = EFT.Scan
+    local best = nil
+    local entities = Scan.pointEntities(EFT.Registry.nearPools(), 'near', playerCoords)
+    -- Only near entries go in, so a point shared with alt entries still counts and never offers those on the use key
+    for _, point in ipairs(Scan.collectPoints(entities, 'near', playerCoords)) do
+        point.option, point.entry = firstAllowed(point, now)
+        if point.option then
+            nearby[#nearby + 1] = point
+            if not best or point.distance < best.distance then best = point end
+        end
+    end
+    return best
+end
+
+local function hidePill()
+    if pillLabel then
+        pillLabel = nil
+        EFT.Nui.pillHide()
+    end
+end
+
+local function pillFrames()
+    while nearest do
+        local point = nearest
+        -- Written back so the marker of a moving vehicle stays under the pill
+        point.coords = EFT.Points.resolve(point.entries[1], point.entity) or point.coords
+        local c = point.coords
+        local onScreen, x, y = GetScreenCoordFromWorldCoord(c.x, c.y, c.z)
+        if onScreen then
+            EFT.Nui.pillPos(x, y)
+            local label = point.option.label or ''
+            if pillLabel ~= label then
+                pillLabel = label
+                EFT.Nui.pill(Config.UseKey, label)
+            end
+        else
+            hidePill()
+        end
+        Wait(0)
+    end
+    framing = false
+end
+
+-- Runs the check now and applies it to the markers and the pill. A running session owns the renderer.
+function Near.sync()
+    nearest = Near.tick(GetEntityCoords(PlayerPedId()), GetGameTimer())
+
+    if not EFT.Session.isActive() then
+        local Render = EFT.Render
+        if #nearby > 0 then
+            if not Render.isRunning() then Render.start() end
+            Render.setPoints(nearby)
+        elseif Render.isRunning() then
+            Render.stop()
+        end
+    end
+
+    if not nearest then
+        hidePill()
+    elseif not framing then
+        framing = true
+        CreateThread(pillFrames)
+    end
+end
+
+local function anyNearPoints()
+    for _, on in pairs(EFT.Registry.nearPools()) do
+        if on then return true end
+    end
+    return false
+end
+
+EFT.Registry.onNearAdded = function()
+    if ticking then return end
+    ticking = true
+    CreateThread(function()
+        while anyNearPoints() do
+            Near.sync()
+            Wait(TICK_MS)
+        end
+        Near.sync()
+        ticking = false
+    end)
+end
+
+function Near.use()
+    local point = Near.tick(GetEntityCoords(PlayerPedId()), GetGameTimer())
+    if not point then return end
+    -- A use key press has no session: the row context comes from the point alone and a submenu has nowhere to open
+    EFT.Select.run({ option = point.option, entry = point.entry, point = point }, {}, { history = {} })
+end

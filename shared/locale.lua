@@ -6,6 +6,13 @@ local en = {
     ['Zurück'] = 'Back',
     ['Zielen'] = 'Aim',
     ['Interagieren'] = 'Interact',
+    ['Fahrertür'] = 'Driver door',
+    ['Beifahrertür'] = 'Passenger door',
+    ['Tür hinten links'] = 'Rear left door',
+    ['Tür hinten rechts'] = 'Rear right door',
+    ['Motorhaube'] = 'Hood',
+    ['Kofferraum'] = 'Trunk',
+    ['Öffnen/Schließen'] = 'Open/Close',
 }
 
 function L(text, ...)

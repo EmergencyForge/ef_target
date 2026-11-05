@@ -15,7 +15,14 @@ local function rowKey(row)
     return row.option.name or row.option.label
 end
 
+local function pointKey(t)
+    return t and t.point and t.point.key
+end
+
 function Session.isActive() return active end
+function Session.menu() return state.menu end
+-- True while the panel has rows, a target without allowed options does not count
+function Session.hasTarget() return target ~= nil end
 
 function Session.blocked()
     if disabled or IsPauseMenuActive() or IsNuiFocused() or IsPedDeadOrDying(PlayerPedId(), true) then return true end
@@ -57,6 +64,7 @@ function Session.update(newTarget)
 
     local newRows, title = EFT.Menu.build(newTarget, state)
     if #newRows == 0 then return hide() end
+    local snapped = pointKey(newTarget) and pointKey(target) ~= pointKey(newTarget)
     target = newTarget
 
     -- Title is part of the key: a point can rename the panel without changing a single row
@@ -66,7 +74,8 @@ function Session.update(newTarget)
         return
     end
 
-    local wanted = rows and rows[index] and rowKey(rows[index])
+    -- The options of a freshly snapped point come preselected, otherwise the selection follows its option
+    local wanted = not snapped and rows and rows[index] and rowKey(rows[index])
     local newIndex = 1
     if wanted then
         for i, row in ipairs(newRows) do

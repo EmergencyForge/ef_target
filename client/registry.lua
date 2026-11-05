@@ -7,7 +7,7 @@ local nextId = 0
 -- buckets[kind][key] = entry[]; kind is global, model, entity, local or point
 local buckets = { global = {}, model = {}, entity = {}, ['local'] = {}, point = {} }
 local zonesByName = {}
-local poolCache, poolRevision
+local poolCache = {}
 
 local function bump() Registry.revision = Registry.revision + 1 end
 
@@ -132,6 +132,7 @@ function Registry.add(kind, key, options, resource, extra)
         list[#list + 1] = entry
     end
     bump()
+    if extra.show == 'near' and Registry.onNearAdded then Registry.onNearAdded() end
     return id
 end
 
@@ -158,15 +159,22 @@ function Registry.coordsEntries()
     return out
 end
 
--- Where show='near' entries exist, so the near scan only walks pools that can matter
-function Registry.nearPools()
-    if poolRevision == Registry.revision then return poolCache end
+-- Without show every entry with an anchor counts: an alt scan also shows near points
+local function matches(entry, show)
+    if show then return entry.show == show end
+    return entry.anchor ~= nil
+end
+
+-- Where matching entries exist, so point scans only walk pools that can matter
+local function poolsFor(show)
+    local cached = poolCache[show or 'any']
+    if cached and cached.revision == Registry.revision then return cached.pools end
     local pools = { ped = false, vehicle = false, object = false, player = false, model = false, coords = false, entity = false }
     local poolOf = { model = 'model', entity = 'entity', ['local'] = 'entity', point = 'coords' }
     for kind, byKey in pairs(buckets) do
         for key, list in pairs(byKey) do
             for _, entry in ipairs(list) do
-                if entry.show == 'near' then
+                if matches(entry, show) then
                     if kind ~= 'global' then
                         pools[poolOf[kind]] = true
                     elseif key == 'any' then
@@ -178,8 +186,25 @@ function Registry.nearPools()
             end
         end
     end
-    poolCache, poolRevision = pools, Registry.revision
+    poolCache[show or 'any'] = { revision = Registry.revision, pools = pools }
     return pools
+end
+
+function Registry.nearPools() return poolsFor('near') end
+function Registry.pointPools() return poolsFor(nil) end
+
+-- Keys of a kind that hold matching entries: model hashes, netIds or entity handles
+function Registry.pointKeys(kind, show)
+    local keys = {}
+    for key, list in pairs(buckets[kind]) do
+        for _, entry in ipairs(list) do
+            if matches(entry, show) then
+                keys[#keys + 1] = key
+                break
+            end
+        end
+    end
+    return keys
 end
 
 -- Zones keep ox field names; type is optional and inferred from points or size
