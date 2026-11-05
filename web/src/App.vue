@@ -11,6 +11,11 @@ const shown = ref(false)
 const pillKey = ref('')
 const pillLabel = ref('')
 const pillShown = ref(false)
+const pillHold = ref<string | undefined>()
+const path = ref<string[]>([])
+const nav = ref<string | undefined>()
+const page = ref(0)
+const keyName = ref('E')
 const pill = ref<InstanceType<typeof KeyPill> | null>(null)
 
 // Dark ink on light accents, white on dark ones; 0.1791 is where both contrasts are equal
@@ -31,6 +36,13 @@ function setAccent(hex: string) {
   s.setProperty('--on-accent', inkOn(hex))
 }
 
+// One CSS transition per hold, Lua only says when it starts and ends
+function setHold(ms: number) {
+  const root = document.documentElement
+  root.style.setProperty('--hold-ms', ms + 'ms')
+  root.classList.toggle('holding', ms > 0)
+}
+
 function onMessage(e: MessageEvent) {
   const d = e.data
   if (!d || typeof d.action !== 'string') return
@@ -39,6 +51,11 @@ function onMessage(e: MessageEvent) {
       rows.value = d.rows ?? []
       title.value = d.title || undefined
       index.value = d.index ?? 1
+      path.value = d.path ?? []
+      if (d.nav) {
+        nav.value = d.nav
+        page.value++
+      }
       shown.value = true
       break
     case 'select':
@@ -50,6 +67,7 @@ function onMessage(e: MessageEvent) {
     case 'pill':
       pillKey.value = d.key ?? ''
       pillLabel.value = d.label ?? ''
+      pillHold.value = d.hold
       pillShown.value = true
       break
     case 'pillPos':
@@ -57,6 +75,12 @@ function onMessage(e: MessageEvent) {
       break
     case 'pillHide':
       pillShown.value = false
+      break
+    case 'hold':
+      setHold(d.ms)
+      break
+    case 'key':
+      keyName.value = d.key ?? 'E'
       break
     case 'accent':
       setAccent(d.hex)
@@ -69,6 +93,15 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
 </script>
 
 <template>
-  <TargetPanel :rows="rows" :title="title" :index="index" :shown="shown" />
-  <KeyPill ref="pill" :key-name="pillKey" :label="pillLabel" :shown="pillShown" />
+  <TargetPanel
+    :rows="rows"
+    :title="title"
+    :index="index"
+    :shown="shown"
+    :path="path"
+    :nav="nav"
+    :page="page"
+    :key-name="keyName"
+  />
+  <KeyPill ref="pill" :key-name="pillKey" :label="pillLabel" :shown="pillShown" :hold="pillHold" />
 </template>

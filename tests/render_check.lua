@@ -3,7 +3,7 @@ local check = harness.check
 local natives = harness.natives
 
 harness.resetEFT()
-_G.Config = { MaxPoints = 24 }
+_G.Config = { MaxPoints = 24, Reticle = { Thickness = 2.0, CenterDot = true } }
 _G.json = { encode = function(t) return t end }
 local sent = {}
 natives.SendNuiMessage = function(msg) sent[#sent + 1] = msg end
@@ -14,7 +14,11 @@ end })
 local handlers = {}
 natives.AddEventHandler = function(name, fn) handlers[name] = fn end
 natives.CreateRuntimeTxd = function() return 1 end
-natives.CreateRuntimeTextureFromImage = function() return 1 end
+-- textures[name][y * 64 + x] = alpha, shade is kept next to it
+local textures, committed, current = {}, {}, nil
+natives.CreateRuntimeTexture = function(_, name) current = { name = name, alpha = {}, shade = {} }; textures[name] = current; return current end
+natives.SetRuntimeTexturePixel = function(t, x, y, r, _, _, a) t.alpha[y * 64 + x] = a; t.shade[y * 64 + x] = r end
+natives.CommitRuntimeTexture = function(t) committed[t.name] = true end
 natives.GetAspectRatio = function() return 16 / 9 end
 natives.GetFrameTime = function() return 1 / 60 end
 natives.CreateThread = function() end
@@ -23,7 +27,7 @@ local origins, cleared, sprites = 0, 0, {}
 local drawn = {}
 natives.SetDrawOrigin = function(x) origins = origins + 1; drawn[#drawn + 1] = x end
 natives.ClearDrawOrigin = function() cleared = cleared + 1 end
-natives.DrawSprite = function(_, name, x, y, w, h) sprites[#sprites + 1] = { name = name, x = x, y = y, w = w, h = h } end
+natives.DrawSprite = function(_, name, x, y, w, h, heading) sprites[#sprites + 1] = { name = name, x = x, y = y, w = w, h = h, heading = heading } end
 
 harness.load('client/eft.lua')
 harness.load('client/nui.lua')
@@ -68,10 +72,20 @@ check('every origin is cleared with an aim', cleared == origins)
 sprites = {}
 Render.setPoints({ thirty[1] }); Render.setAim({ key = 'x', coords = vec3(0, 0, 0) }, true); Render.drawFrame()
 local first = sprites[1]
-local haloSeen = false
-for _, sp in ipairs(sprites) do if sp.name == 'halo' then haloSeen = true end end
-check('a hit draws the thin halo', haloSeen)
+check('a point uses the square frame', first.name == 'point' and first.heading == 0.0)
+check('the own marker is turned into a diamond', sprites[#sprites].name:sub(1, 5) == 'frame' and sprites[#sprites].heading == 45.0)
 check('sprite height follows the aspect ratio', math.abs(first.h / first.w - 16 / 9) < 1e-6)
+
+local function alpha(name, x, y) return textures[name].alpha[(y + 32) * 64 + x + 32] end
+local function shade(name, x, y) return textures[name].shade[(y + 32) * 64 + x + 32] end
+check('every texture is committed', committed.fill and committed.point and committed.frame0 and committed.frame5)
+check('the open frame has a gap in the middle of a side', alpha('frame0', 0, -22) == 0)
+check('the open frame keeps its corners', alpha('frame0', -21, -22) > 200 and shade('frame0', -21, -22) == 255)
+check('the last frame is closed', alpha('frame5', 0, -22) > 200)
+check('the closing steps shrink the gap', alpha('frame3', 7, -22) > 200 and alpha('frame0', 7, -22) == 0)
+check('the outline stays black', shade('frame5', 0, -28) == 0 and alpha('frame5', 0, -28) > 0)
+check('the centre dot is painted', alpha('frame0', 0, 0) == 255)
+check('a point has no dot and keeps its gap', alpha('point', 0, 0) == 0 and alpha('point', 0, -22) == 0)
 
 sprites = {}
 Render.setPoints({}); Render.setAim({}, false); Render.drawFrame()
@@ -93,7 +107,8 @@ local realPrint = print
 _G.print = function(text) lines[#lines + 1] = text end
 local txdCalls = 0
 natives.CreateRuntimeTxd = function() txdCalls = txdCalls + 1; return 1 end
-natives.CreateRuntimeTextureFromImage = function() error('boom') end
+local paintTexture = natives.CreateRuntimeTexture
+natives.CreateRuntimeTexture = function() error('boom') end
 Render = fresh()
 local startOk = pcall(Render.start); pcall(Render.start)
 Render.setPoints({ thirty[1] })
@@ -104,7 +119,7 @@ check('a failed load is not retried', txdCalls == 1)
 check('a failed load reports once', #lines == 1)
 
 lines, txdCalls = {}, 0
-natives.CreateRuntimeTextureFromImage = function() return nil end
+natives.CreateRuntimeTexture = function() return nil end
 Render = fresh()
 _G.print = function(text) lines[#lines + 1] = text end
 startOk = pcall(Render.start); pcall(Render.start)
@@ -112,7 +127,7 @@ _G.print = realPrint
 check('a falsy texture return counts as failure', startOk and not Render.isRunning() and txdCalls == 1 and #lines == 1)
 
 natives.CreateRuntimeTxd = function() return 1 end
-natives.CreateRuntimeTextureFromImage = function() return 1 end
+natives.CreateRuntimeTexture = paintTexture
 Render = fresh()
 Render.start(); Render.stop(); Render.setPoints({ thirty[1] }); Render.start()
 check('points set while stopped are ignored', not Render.needsFrame())
@@ -136,7 +151,17 @@ for _, sp in ipairs(sprites) do if sp.name == 'fill' then filled = true end end
 check('a new aim does not start from the old hit state', not filled)
 Render.stop()
 
+Config.Reticle = { Thickness = 3.5, CenterDot = false }
+Render = fresh()
+Render.start(); Render.stop()
+check('a thick line covers what the outline had', shade('frame5', 0, -27) == 255)
+check('the centre dot can be turned off', alpha('frame0', 0, 0) == 0)
+Config.Reticle = { Thickness = 2.0, CenterDot = true }
+Render = fresh()
+Render.start(); Render.stop()
+check('a thin line leaves that pixel to the outline', shade('frame5', 0, -27) == 0)
+
 for _, name in ipairs({ 'Config', 'json', 'exports', 'SendNuiMessage', 'AddEventHandler', 'CreateRuntimeTxd',
-    'CreateRuntimeTextureFromImage', 'GetAspectRatio', 'GetFrameTime', 'CreateThread', 'Wait', 'SetDrawOrigin',
+    'CreateRuntimeTexture', 'SetRuntimeTexturePixel', 'CommitRuntimeTexture', 'GetAspectRatio', 'GetFrameTime', 'CreateThread', 'Wait', 'SetDrawOrigin',
     'ClearDrawOrigin', 'DrawSprite' }) do _G[name] = nil end
 harness.resetEFT()

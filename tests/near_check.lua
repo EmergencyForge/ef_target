@@ -14,7 +14,7 @@ end
 
 harness.resetEFT()
 _G.Config = { Key = 'LMENU', UseKey = 'E', Toggle = false, SnapRadius = 0.035, MaxPoints = 24, DefaultPoints = true,
-    DefaultDistance = 7.0, RayLength = 20.0, Locale = 'de' }
+    DefaultDistance = 7.0, RayLength = 20.0, Locale = 'de', Reticle = { Thickness = 2.0, CenterDot = true } }
 _G.L = function(text) return text end
 _G.json = { encode = function(t) return t end }
 
@@ -162,7 +162,9 @@ stub({
     end,
 
     CreateRuntimeTxd = function() return 1 end,
-    CreateRuntimeTextureFromImage = function() return 1 end,
+    CreateRuntimeTexture = function() return 1 end,
+    SetRuntimeTexturePixel = function() end,
+    CommitRuntimeTexture = function() end,
     GetFrameTime = function() return 1 / 60 end,
     SetDrawOrigin = function() end,
     ClearDrawOrigin = function() end,
@@ -184,6 +186,7 @@ EFT.Framework = { hasGroup = function() return groupAllowed end, hasItems = func
 for _, file in ipairs({ 'filter', 'points', 'menu', 'select', 'nui', 'session', 'accent', 'spring', 'render', 'scan', 'near', 'input' }) do
     harness.load('client/' .. file .. '.lua')
 end
+pump(1)
 local R, N, S, Session, Render = EFT.Registry, EFT.Near, EFT.Scan, EFT.Session, EFT.Render
 
 local aimed, aimHit, aimCalls, drawn, emptySends = nil, nil, 0, nil, 0
@@ -791,7 +794,7 @@ threads = {}
 -- Without textures the session and the panel still run
 local realPrint = print
 _G.print = function() end
-natives.CreateRuntimeTextureFromImage = function() return nil end
+natives.CreateRuntimeTexture = function() return nil end
 harness.load('client/render.lua')
 sent = {}
 local plain = R.add('global', 'vehicle', { name = 'plain', label = 'Ohne Marker' }, 'res')
@@ -802,15 +805,63 @@ check('the panel works without markers', not EFT.Render.isRunning() and Session.
 release()
 pump(2)
 R.remove(plain)
-natives.CreateRuntimeTextureFromImage = function() return 1 end
+natives.CreateRuntimeTexture = function() return 1 end
 harness.load('client/render.lua')
+threads = {}
+
+-- Hold: the key has to stay down on the same row
+local heldRuns = 0
+local timed = R.add('global', 'vehicle', { name = 'timed', label = 'Aufbrechen', hold = 200, onSelect = function() heldRuns = heldRuns + 1 end }, 'res')
+local quick = R.add('global', 'vehicle', { name = 'quick', label = 'Schnell' }, 'res')
+sent = {}
+press()
+scans(2)
+check('a session names the use key', last('key') and last('key').key == 'E')
+check('the panel marks the held row', last('show').rows[1].hold == 'halten')
+
+justPressed[24], heldDown[24] = true, true
+pump(2)
+justPressed[24] = false
+check('a press on a held row starts the fill', last('hold') and last('hold').ms == 200 and heldRuns == 0)
+heldDown[24] = false
+pump(2)
+check('letting go early runs nothing and clears the fill', heldRuns == 0 and last('hold').ms == 0)
+
+justPressed[24], heldDown[24] = true, true
+pump(2)
+justPressed[24] = false
+justPressed[14] = true
+pump(1)
+justPressed[14] = false
+pump(2)
+check('another row cancels the hold', heldRuns == 0 and last('hold').ms == 0)
+heldDown[24] = false
+pump(1)
+justPressed[15] = true
+pump(1)
+justPressed[15] = false
+
+commands['+ef_target_use']()
+pump(1)
+check('the use key starts the same hold', last('hold').ms == 200)
+commands['-ef_target_use']()
+pump(2)
+check('the use key cancels on release', heldRuns == 0 and last('hold').ms == 0)
+
+commands['+ef_target_use']()
+pump(8)
+check('a full hold runs the option', heldRuns == 1 and last('hold').ms == 0)
+commands['-ef_target_use']()
+release()
+pump(3)
+R.remove(timed); R.remove(quick)
 threads = {}
 
 -- Built-in vehicle points
 harness.load('client/defaults.lua')
 local function defaultEntry(door)
     local offsets = { [4] = 1, [5] = 0 }
-    local names = { [0] = 'door_dside_f', 'door_pside_f', 'door_dside_r', 'door_pside_r' }
+    local names = { [0] = 'handle_dside_f', 'handle_pside_f', 'handle_dside_r', 'handle_pside_r' }
     for _, entry in ipairs(R.forEntity(vehicle, 2, 77, nil, false)) do
         local anchor = entry.anchor
         if entry.resource == 'ef_target' and ((anchor.bone and anchor.bone == names[door]) or (anchor.offset and anchor.offset.y == offsets[door])) then

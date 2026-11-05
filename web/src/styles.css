@@ -1,6 +1,12 @@
 @font-face { font-family: 'Geist'; src: url('nui://ef_lib/web/dist/assets/geist-500.woff2') format('woff2'); font-weight: 500; }
 @font-face { font-family: 'Geist'; src: url('nui://ef_lib/web/dist/assets/geist-600.woff2') format('woff2'); font-weight: 600; }
 
+/* 96 %: the kit's 82 % surface turns brown over a red vehicle */
+:root {
+  --panel: rgba(20, 20, 22, 0.96);
+  --panel-line: rgba(255, 255, 255, 0.1);
+}
+
 html, body {
   margin: 0;
   height: 100%;
@@ -19,8 +25,8 @@ html, body {
   padding: 5px;
   box-sizing: border-box;
   border-radius: 10px;
-  background: var(--surface);
-  box-shadow: 0 0 0 1px var(--line), 0 12px 32px rgba(0, 0, 0, 0.4);
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--panel-line), 0 12px 32px rgba(0, 0, 0, 0.4);
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -41,14 +47,37 @@ html, body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.tp-title b { font-weight: 500; color: var(--text); }
+.tp-title i { padding: 0 4px; font-style: normal; opacity: 0.55; }
 
-/* 8.5 rows: the cut-off half row tells the player the list scrolls */
-.tp-list {
-  max-height: calc(var(--row) * 8.5);
+.tp-view {
+  position: relative;
   overflow: hidden;
+  transition: height 240ms var(--ease);
 }
 
+/* 8.5 rows: the cut-off half row tells the player the list scrolls.
+   Absolute, so the old and the new level can pass each other. */
+.tp-list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  max-height: calc(var(--row) * 8.5);
+  overflow: hidden;
+  scroll-behavior: smooth;
+}
+
+.tp-push-enter-active, .tp-pop-enter-active { transition: transform 260ms var(--ease), opacity 260ms var(--ease); }
+.tp-push-leave-active, .tp-pop-leave-active { transition: transform 180ms ease-in, opacity 180ms ease-in; }
+.tp-push-enter-from { transform: translateX(44px); opacity: 0; }
+.tp-push-leave-to { transform: translateX(-30px); opacity: 0; }
+.tp-pop-enter-from { transform: translateX(-44px); opacity: 0; }
+.tp-pop-leave-to { transform: translateX(30px); opacity: 0; }
+
 .tp-row {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -60,8 +89,14 @@ html, body {
   font-weight: 500;
   color: var(--text-2);
 }
+.tp-row.sel {
+  background: rgba(255, 255, 255, 0.13);
+  color: #fff;
+}
+.tp-row > * { position: relative; }
+.tp-row .fill { position: absolute; }
 .tp-row.divider {
-  position: relative;
+  overflow: visible;
   margin-top: 5px;
 }
 .tp-row.divider::before {
@@ -80,11 +115,32 @@ html, body {
   font-size: 12.5px;
   opacity: 0.85;
 }
-.tp-row span {
+.tp-label {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.tp-row .tp-chev { width: 10px; font-size: 9px; opacity: 0.55; }
+.tp-row em, .pill em { font-size: 10.5px; font-style: normal; opacity: 0.72; }
+.tp-row .kbd {
+  flex: none;
+  background: var(--accent-color);
+  color: var(--on-accent);
+}
+
+/* Runs on the selected row or the pill for as long as Lua holds the key, and snaps back on release */
+.fill {
+  inset: 0;
+  background: rgba(var(--accent-rgb), 0.62);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition: transform 140ms ease-out;
+}
+.holding .tp-row.sel .fill, .holding .pill .fill {
+  transform: scaleX(1);
+  transition: transform var(--hold-ms) linear;
 }
 
 .pill {
@@ -98,8 +154,9 @@ html, body {
   padding: 0 11px 0 5px;
   border-radius: 8px;
   white-space: nowrap;
-  background: var(--surface);
-  box-shadow: 0 0 0 1px var(--line), 0 8px 24px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--panel-line), 0 8px 24px rgba(0, 0, 0, 0.35);
   font-size: 12.5px;
   font-weight: 500;
   color: var(--text);
@@ -107,6 +164,8 @@ html, body {
   will-change: transform;
 }
 .pill.show { display: inline-flex; }
+.pill > * { position: relative; }
+.pill .fill { position: absolute; }
 .pill .kbd {
   background: var(--accent-color);
   color: var(--on-accent);

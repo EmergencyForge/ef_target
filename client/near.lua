@@ -53,7 +53,7 @@ local function hidePill()
 end
 
 -- The player can rebind the key in the game settings, the config only holds its default
-local function useKey()
+function Near.useKey()
     local button = GetControlInstructionalButton(0, joaat('+ef_target_use') | 0x80000000, true)
     return button and button:match('^t_(.+)$') or Config.UseKey
 end
@@ -70,7 +70,7 @@ local function pillFrames()
             local label = point.option.label or ''
             if pillLabel ~= label then
                 pillLabel = label
-                EFT.Nui.pill(useKey(), label)
+                EFT.Nui.pill(Near.useKey(), label, EFT.Menu.holdTime(point.option))
             end
         else
             hidePill()
@@ -135,6 +135,15 @@ EFT.Registry.onNearAdded = function()
         safeSync()
         ticking = false
     end)
+end
+
+function Near.selected()
+    return nearest and nearest.option
+end
+
+function Near.holdTime()
+    local option = Near.selected()
+    return option and EFT.Menu.holdTime(option)
 end
 
 function Near.use()

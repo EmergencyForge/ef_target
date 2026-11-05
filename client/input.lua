@@ -1,14 +1,41 @@
--- Keys and per-frame controls of a session. Selection runs on the wheel and left click, there is no NUI focus.
-local CONTROLS = { 14, 15, 16, 17, 24, 25, 37, 140, 141, 142 }
+-- Keys and per-frame controls of a session. Selection runs on the wheel, left click and the use key, there is no NUI focus.
+-- 38 and 86 sit on E by default, the use key must not pick up or honk during a session
+local CONTROLS = { 14, 15, 16, 17, 24, 25, 37, 38, 86, 140, 141, 142 }
 local FIRE_CONTROLS = { 24, 140, 141, 142 }
-local WHEEL_DOWN, WHEEL_UP, CLICK = 14, 15, 24
+local WHEEL_DOWN, WHEEL_UP, CLICK, BACK = 14, 15, 24, 25
 
 local looping, clicking = false, false
+-- Read here instead of in the hold loop: a disabled control only reports after this frame disabled it
+local mouseDown, useDown = false, false
 
-local function click()
-    local ok, err = pcall(EFT.Session.click)
-    clicking = false
-    if not ok then print('[ef_target] click failed: ' .. tostring(err)) end
+-- True once the key stayed down on the same entry for the whole time
+local function held(ms, selected)
+    local wanted = selected()
+    local deadline = GetGameTimer() + ms
+    EFT.Nui.hold(ms)
+    while GetGameTimer() < deadline do
+        Wait(0)
+        if not (mouseDown or useDown) or selected() ~= wanted then
+            EFT.Nui.hold(0)
+            return false
+        end
+    end
+    EFT.Nui.hold(0)
+    return true
+end
+
+-- On its own thread: run may block for a whole progress bar and the frame loop has to keep going meanwhile
+local function press(holdTime, selected, run)
+    if clicking then return end
+    clicking = true
+    CreateThread(function()
+        local ok, err = pcall(function()
+            local ms = holdTime()
+            if not ms or held(ms, selected) then run() end
+        end)
+        clicking = false
+        if not ok then print('[ef_target] click failed: ' .. tostring(err)) end
+    end)
 end
 
 local function sessionFrames(player)
@@ -16,15 +43,14 @@ local function sessionFrames(player)
     while Session.isActive() do
         DisablePlayerFiring(player, true)
         for _, control in ipairs(CONTROLS) do DisableControlAction(0, control, true) end
+        mouseDown = IsDisabledControlPressed(0, CLICK)
         if IsDisabledControlJustPressed(0, WHEEL_DOWN) then Session.wheel(1) end
         if IsDisabledControlJustPressed(0, WHEEL_UP) then Session.wheel(-1) end
-        -- onSelect may block for a whole progress bar, this loop has to keep going meanwhile
-        if IsDisabledControlJustPressed(0, CLICK) and not clicking then
-            clicking = true
-            CreateThread(click)
-        end
+        if IsDisabledControlJustPressed(0, BACK) then Session.back() end
+        if IsDisabledControlJustPressed(0, CLICK) then press(Session.holdTime, Session.selected, Session.click) end
         Wait(0)
     end
+    mouseDown = false
 end
 
 -- The button is usually still down when a click ends the session, freed controls would fire the drawn weapon.
@@ -55,6 +81,8 @@ end
 
 local function start()
     if not EFT.Session.begin() then return end
+    -- Sent per session, the player can rebind the key at any time
+    EFT.Nui.key(EFT.Near.useKey())
     EFT.Render.start()
     EFT.Near.sync()
     EFT.Scan.start()
@@ -77,9 +105,17 @@ RegisterCommand('-ef_target', function()
     if not Config.Toggle then EFT.Session.stop('released') end
 end, false)
 
-RegisterCommand('+ef_target_use', function() EFT.Near.use() end, false)
--- A mapped + command needs its - partner, or the key runs into an unknown command on release
-RegisterCommand('-ef_target_use', function() end, false)
+RegisterCommand('+ef_target_use', function()
+    useDown = true
+    local Session, Near = EFT.Session, EFT.Near
+    if Session.isActive() then
+        press(Session.holdTime, Session.selected, Session.click)
+    else
+        press(Near.holdTime, Near.selected, Near.use)
+    end
+end, false)
+
+RegisterCommand('-ef_target_use', function() useDown = false end, false)
 
 RegisterKeyMapping('+ef_target', L('Zielen'), 'keyboard', Config.Key)
 RegisterKeyMapping('+ef_target_use', L('Interagieren'), 'keyboard', Config.UseKey)

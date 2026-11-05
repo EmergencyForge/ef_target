@@ -39,7 +39,7 @@ check('a zone only target is titled by the zone', select(2, M.build({ entries = 
 
 local inSub = { entries = { entry({ { label = 'Sub', menuName = 'sub' }, { label = 'Home' } }) }, zones = {}, entity = 5, entityType = 1, coords = vec3(0, 0, 0), distance = 1 }
 local subRows = M.build(inSub, { menu = 'sub', history = {} })
-check('a submenu offers the way back', subRows[1].option.name == 'builtin:goback' and subRows[2].label == 'Sub' and #subRows == 2)
+check('a submenu shows its own rows only', subRows[1].label == 'Sub' and #subRows == 1)
 check('the home menu hides submenu options', #M.build(inSub, state) == 1)
 
 check('signature ignores callbacks', M.signature(rows) == M.signature(M.build(onPoint, state)))
@@ -94,11 +94,6 @@ local opened = false
 check('openMenu enters the menu and runs its target',
     S.run({ option = { openMenu = 'sub', onSelect = function() opened = true end } }, target, menuState) == 'menu'
     and menuState.menu == 'sub' and opened)
-check('the way back pops the history', S.run({ option = { name = 'builtin:goback' } }, target, menuState) == 'menu' and menuState.menu == nil)
-S.run({ option = { openMenu = 'a' } }, target, menuState)
-S.run({ option = { openMenu = 'b' } }, target, menuState)
-S.run({ option = { name = 'builtin:goback' } }, target, menuState)
-check('back goes one level up', menuState.menu == 'a')
 S.run({ option = { openMenu = 'home' } }, target, menuState)
 check('home means no menu', menuState.menu == nil)
 
@@ -125,7 +120,15 @@ local hidden = { point = { key = 'h', coords = vec3(1, 1, 1), distance = 1.0, en
     entries = { entry({ { label = 'Hidden', canInteract = function() return false end } }, { id = 8, anchor = { bone = 'b' } }) } },
     entries = { general }, zones = {}, entity = 5, entityType = 2, coords = vec3(0, 0, 0), distance = 2.0 }
 check('no divider when every point option is filtered out', not M.build(hidden, state)[1].divider)
-check('a back row alone does not earn a divider', M.build(hidden, { menu = 'sub', history = {} })[1].divider == false)
+
+local timed = { entries = { entry({ { label = 'Lang', hold = 1500 }, { label = 'Null', hold = 0 }, { label = 'Text', hold = 'x' }, { label = 'Tief', openMenu = 'm' } }) },
+    zones = {}, entity = 5, entityType = 2, coords = vec3(0, 0, 0), distance = 1.0 }
+local timedRows = M.build(timed, state)
+check('hold reaches the row', timedRows[1].hold == 1500)
+check('a hold that is no positive number runs on the press', timedRows[2].hold == nil and timedRows[3].hold == nil)
+check('a row knows it opens a submenu', timedRows[4].submenu == true and not timedRows[1].submenu)
+timed.entries[1].options[1].hold = 900
+check('the signature sees a new hold', M.signature(M.build(timed, state)) ~= M.signature(timedRows))
 
 local failState = { menu = 'a', history = { 'home' } }
 _G.print = function() end

@@ -52,8 +52,7 @@ server_scripts {
 }
 
 files {
-    'web/dist/**/*',
-    'assets/*.png'
+    'web/dist/**/*'
 }
 
 -- Open source under GPL-3.0: nothing gets encrypted on a Cfx escrow upload

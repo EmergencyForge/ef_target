@@ -18,25 +18,31 @@ Das Manifest enthält `provide 'ox_target'`, `provide 'qb-target'` und `provide 
 
 ## Bedienung
 
-Alt halten (`LMENU`, in den FiveM-Tastenbelegungen änderbar). In der Bildmitte erscheint eine Raute, Punkte in Reichweite erscheinen ebenfalls. Trifft der Strahl eine Entity oder Zone, oder liegt ein Punkt nahe der Bildmitte, füllt sich die Raute und das Panel zeigt die Optionen.
+Alt halten (`LMENU`, in den FiveM-Tastenbelegungen änderbar). In der Bildmitte erscheint eine Raute aus vier Ecken, Punkte in Reichweite erscheinen als eckige Rahmen. Trifft der Strahl eine Entity oder Zone, oder liegt ein Punkt nahe der Bildmitte, schließt und füllt sich die Raute in der Akzentfarbe aus ef_lib, und das Panel zeigt die Optionen.
 
-- Mausrad wählt die Option, Linksklick löst aus. Bei nur einer Option reicht der Klick.
+- Mausrad wählt die Option, Linksklick oder E löst aus. Bei nur einer Option reicht der Klick.
+- Optionen mit `hold` zeigen "halten": Taste gedrückt lassen, die Zeile füllt sich. Loslassen oder eine andere Zeile wählen bricht ab.
+- Rechtsklick geht im Untermenü eine Ebene zurück und landet auf der Zeile, von der es kam.
 - Alt loslassen bricht ab.
 - Es gibt keine Bedienung mit dem Mauszeiger. Kamera und Laufen bleiben frei, die NUI nimmt keinen Fokus.
 - Solange Alt aktiv ist, sind Schießen, Zielen und Nahkampf gesperrt, das Mausrad schaltet keine Waffe um.
 - Alt endet von selbst bei Pausenmenü, Tod, NUI-Fokus (etwa ein offenes Menü einer anderen Resource), laufendem Fortschrittsbalken von ef_lib oder ox_lib und `DisableTargeting(true)`.
 
-Rastet die Raute auf einem Punkt ein, stehen dessen Optionen oben und sind vorausgewählt. Nach einer Trennlinie folgen die allgemeinen Optionen der Entity. Ein Punkt wird nur gezeichnet, wenn mindestens eine seiner Optionen für den Spieler erlaubt ist. Zonen bekommen eine kleine Raute am Mittelpunkt, die nicht einrastet. `drawSprite = false` schaltet sie ab.
+Rastet die Raute auf einem Punkt ein, stehen dessen Optionen oben und sind vorausgewählt. Nach einer Trennlinie folgen die allgemeinen Optionen der Entity. Ein Punkt wird nur gezeichnet, wenn mindestens eine seiner Optionen für den Spieler erlaubt ist. Zonen bekommen einen kleinen Rahmen am Mittelpunkt, die nicht einrastet. `drawSprite = false` schaltet sie ab.
 
-Eingebaut sind Punkte an den vier Türen, der Motorhaube und dem Kofferraum aller Fahrzeuge. `Config.DefaultPoints = false` schaltet sie ab.
+Eingebaut sind Punkte an den vier Türgriffen (ohne Griff-Bone an der Tür), der Motorhaube und dem Kofferraum aller Fahrzeuge. `Config.DefaultPoints = false` schaltet sie ab.
 
 ## Config
 
 ```lua
 Config = {
     Key = 'LMENU',           -- Taste zum Öffnen
-    UseKey = 'E',            -- löst die Option eines near-Punkts aus
+    UseKey = 'E',            -- löst wie Linksklick die markierte Option aus, auch an near-Punkten
     Toggle = false,          -- true: einmal drücken öffnet, nochmal schließt
+    Reticle = {
+        Thickness = 2.0,     -- Strichstärke der eigenen Raute in Pixeln bei 1080p, 1.0 bis 3.5
+        CenterDot = true,    -- Punkt in der Mitte der eigenen Raute
+    },
     SnapRadius = 0.035,      -- Anteil der Bildhöhe, in dem die Raute auf einen Punkt springt
     MaxPoints = 24,          -- so viele Punkte werden gleichzeitig gezeichnet, die nächsten gewinnen
     DefaultPoints = true,    -- eingebaute Fahrzeugpunkte
@@ -115,6 +121,7 @@ exports.ef_target:AddPolyZone({ points = { vec3(..), vec3(..), vec3(..) }, thick
 | `canInteract` | Funktion `(entity, distance, coords, name, bone)`, gibt `true` oder `false` zurück |
 | `menuName` | Menü, in dem die Option steht. Ohne Wert steht sie im Hauptmenü |
 | `openMenu` | Menüname, der beim Auswählen geöffnet wird. `'home'` geht zurück |
+| `hold` | Millisekunden, die die Taste gedrückt bleiben muss. Ohne Wert löst der Druck sofort aus |
 | `bones`, `offset`, `absoluteOffset` | Für Scripts aus ox_target, siehe unten |
 
 Als Ziel genau eins aus `onSelect`, `export`, `event`, `serverEvent`, `command`.
@@ -123,7 +130,7 @@ Als Ziel genau eins aus `onSelect`, `export`, `event`, `serverEvent`, `command`.
 
 `canInteract` läuft für das aktuelle Ziel höchstens alle 250 ms je Option. Für `groups` und `items` erkennt ef_target ESX, QBCore, Qbox oder ox_core und ox_inventory. Ohne Framework gelten sie als erfüllt, wie bei ox_target.
 
-Untermenü, Beispiel in `example.lua`: Eine Option mit `openMenu = 'ausweis'` öffnet das Menü, die Optionen mit `menuName = 'ausweis'` stehen darin, eine Zeile "Zurück" wird automatisch angelegt.
+Untermenü, Beispiel in `example.lua`: Eine Option mit `openMenu = 'ausweis'` öffnet das Menü, die Optionen mit `menuName = 'ausweis'` stehen darin. Der Pfad steht oben im Panel, Rechtsklick geht zurück.
 
 ## Umstieg von ox_target
 

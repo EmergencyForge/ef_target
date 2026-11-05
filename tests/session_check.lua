@@ -72,27 +72,27 @@ check('a run option ends the session', ran == 1 and not S.isActive())
 S.begin()
 local sub = target({ { name = 'sub', label = 'Sub', openMenu = 'm' }, { name = 'in', label = 'In', menuName = 'm', onSelect = run } })
 S.update(sub); S.click()
-check('a submenu keeps the session open', S.isActive() and sent[#sent].action == 'show' and sent[#sent].rows[1].id == 'builtin:goback')
+check('a submenu keeps the session open', S.isActive() and sent[#sent].action == 'show' and #sent[#sent].path == 1)
 S.stop('test')
 S.begin(); S.update(sub)
-check('stop resets the menu', sent[#sent].rows[1].id ~= 'builtin:goback')
+check('stop resets the menu', #sent[#sent].path == 0)
 
 -- The menu belongs to what it was opened on
 local other = target({ { name = 'other', label = 'Other' } })
 other.entity = 6
 S.click()
-check('the submenu is open', sent[#sent].rows[1].id == 'builtin:goback')
+check('the submenu is open', #sent[#sent].path == 1)
 S.update(other)
 check('another entity drops the submenu', sent[#sent].action == 'show' and sent[#sent].rows[1].label == 'Other' and #sent[#sent].rows == 1)
 S.update(sub)
-check('the first entity starts at home again', sent[#sent].rows[1].id ~= 'builtin:goback')
+check('the first entity starts at home again', #sent[#sent].path == 0)
 S.click()
 S.update(nil); S.update(sub)
-check('a target lost for a moment keeps the submenu', sent[#sent].rows[1].id == 'builtin:goback')
+check('a target lost for a moment keeps the submenu', #sent[#sent].path == 1)
 local onPoint = target({ { name = 'general', label = 'General' } })
 onPoint.point = { key = 'p1', entries = {}, distance = 1.0, entity = 5 }
 S.update(onPoint)
-check('another point drops the submenu', sent[#sent].rows[1].id ~= 'builtin:goback')
+check('another point drops the submenu', #sent[#sent].path == 0)
 S.stop('test')
 
 -- One option split over bones gives points with equal rows, a new snap still goes back to the top
@@ -136,7 +136,7 @@ count = #sent
 S.wheel(1)
 check('a menu result leaves the next session alone', S.isActive() and sent[#sent].action == 'select' and #sent == count + 1)
 S.update(two)
-check('the next session stays at home', sent[#sent].action == 'select' or sent[#sent].rows[1].id ~= 'builtin:goback')
+check('the next session stays at home', sent[#sent].action == 'select' or #sent[#sent].path == 0)
 S.stop('test')
 
 -- A failing option rolls its menu change back, that must not reach the session after it
@@ -149,8 +149,43 @@ ranAcross({ name = 'e', label = 'E', openMenu = 'm3', onSelect = function()
 end })
 _G.print = realPrint
 S.update(sub)
-check('a failing old click leaves the new submenu open', S.isActive() and sent[#sent].rows and sent[#sent].rows[1].id == 'builtin:goback')
+check('a failing old click leaves the new submenu open', S.isActive() and sent[#sent].rows and #sent[#sent].path == 1)
 S.stop('test')
+
+-- Right click walks back the way the clicks came
+local deep = target({
+    { name = 'x', label = 'X', onSelect = run },
+    { name = 'y', label = 'Y', openMenu = 'first' },
+    { name = 'f1', label = 'F1', menuName = 'first', onSelect = run },
+    { name = 'f2', label = 'F2', menuName = 'first', openMenu = 'second' },
+    { name = 's1', label = 'S1', menuName = 'second', onSelect = run },
+})
+S.begin(); S.update(deep)
+S.back()
+check('back at home does nothing', sent[#sent].action == 'show' and #sent[#sent].rows == 2)
+S.wheel(1); S.click()
+check('a push names the way and the direction', sent[#sent].nav == 'push' and sent[#sent].path[1] == 'Y' and sent[#sent].index == 1)
+S.wheel(1); S.click()
+check('the path grows with the depth', sent[#sent].path[2] == 'F2' and sent[#sent].rows[1].label == 'S1')
+S.back()
+check('back lands on the row it came from', sent[#sent].nav == 'pop' and sent[#sent].index == 2 and #sent[#sent].path == 1)
+S.back()
+check('back reaches home on the row it came from', sent[#sent].index == 2 and #sent[#sent].path == 0 and sent[#sent].rows[1].label == 'X')
+S.click()
+local emptied = target({ { name = 'x', label = 'X', onSelect = run } })
+S.update(emptied)
+check('an emptied submenu falls back to home', sent[#sent].rows[1].label == 'X' and #sent[#sent].path == 0)
+check('the direction is used once', sent[#sent].nav == nil)
+S.stop('test')
+
+local timed = target({ { name = 't', label = 'T', hold = 1200, onSelect = run }, B })
+S.begin(); S.update(timed)
+check('the selected row gives its hold time', S.holdTime() == 1200 and S.selected() == sent[#sent].rows[1].id)
+check('a held row is marked for the panel', sent[#sent].rows[1].hold == 'halten' and sent[#sent].rows[2].hold == nil)
+S.wheel(1)
+check('another row has no hold time and another id', S.holdTime() == nil and S.selected() == sent[#sent - 1].rows[2].id)
+S.stop('test')
+check('a stopped session has no selection', S.selected() == nil and not S.holdTime())
 
 natives.IsPauseMenuActive = function() return true end
 check('pause menu blocks a start', S.begin() == false)

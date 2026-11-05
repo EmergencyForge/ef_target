@@ -13,7 +13,7 @@ exports.ef_target:AddPoint({
 })
 ```
 
-An der Fahrertür aller Fahrzeuge erscheint eine Raute, solange Alt gehalten wird. Mehr Beispiele stehen in [example.lua](example.lua).
+An der Fahrertür aller Fahrzeuge erscheint ein Punkt, solange Alt gehalten wird. Mehr Beispiele stehen in [example.lua](example.lua).
 
 ## Installation
 

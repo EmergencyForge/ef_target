@@ -3,7 +3,7 @@ local Select = {}
 EFT.Select = Select
 
 -- Fields that are internals or already acted upon, the receiving resource does not need them
-local dropped = { 'icon', 'iconColor', 'groups', 'items', 'anyItem', 'canInteract', 'onSelect', 'export', 'event', 'serverEvent', 'command', 'source', 'guard', 'qbInteract' }
+local dropped = { 'icon', 'iconColor', 'groups', 'items', 'anyItem', 'canInteract', 'onSelect', 'export', 'event', 'serverEvent', 'command', 'source', 'guard', 'qbInteract', 'hold' }
 
 function Select.response(option, target, server, row)
     local response = {}
@@ -49,12 +49,6 @@ end
 
 function Select.run(row, target, state)
     local option = row.option
-    if option.name == 'builtin:goback' then
-        local previous = table.remove(state.history)
-        state.menu = previous ~= 'home' and previous or nil
-        return 'menu'
-    end
-
     local context = EFT.Menu.context(row, target)
     local entity = context.entity
     if entity and entity ~= 0 and not DoesEntityExist(entity) then return 'stale' end

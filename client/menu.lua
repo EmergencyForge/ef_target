@@ -14,20 +14,22 @@ function Menu.context(row, target)
     return { entity = target.entity, distance = target.distance, coords = target.coords }
 end
 
+-- Milliseconds the key has to stay down, nil runs the option on the press
+function Menu.holdTime(option)
+    local hold = option.hold
+    if type(hold) == 'number' and hold > 0 then return hold end
+end
+
 -- Point rows come first, then the general entries of the entity, then zones
 function Menu.build(target, state)
     local rows = {}
     local now = GetGameTimer()
 
-    if state.menu then
-        local back = { name = 'builtin:goback', label = L('Zurück'), icon = 'fa-solid fa-circle-chevron-left' }
-        rows[1] = { id = back.name, label = back.label, icon = back.icon, divider = false, option = back }
-    end
-
     local function add(entry, id, options, target, distance, extra)
         for index, option in ipairs(options) do
             local row = { id = id .. ':' .. index, label = option.label, icon = option.icon, iconColor = option.iconColor,
-                divider = false, option = option, entry = entry }
+                divider = false, option = option, entry = entry, hold = Menu.holdTime(option),
+                submenu = option.openMenu ~= nil }
             for k, v in pairs(extra or {}) do row[k] = v end
             if EFT.Filter.static(option, distance, state.menu) and EFT.Filter.interact(option, Menu.context(row, target), now) then
                 rows[#rows + 1] = row
@@ -50,9 +52,7 @@ function Menu.build(target, state)
         add(zone, 'z' .. zone.id, zone.options, target, target.distance, { zone = zone.id })
     end
 
-    -- The back row is not a point row, so count point rows apart from it
-    local backRows = state.menu and 1 or 0
-    if pointRows > backRows and rows[pointRows + 1] then rows[pointRows + 1].divider = true end
+    if pointRows > 0 and rows[pointRows + 1] then rows[pointRows + 1].divider = true end
 
     local title = point and point.label
     if not title and target.entity and target.entity ~= 0 and titles[target.entityType] then title = L(titles[target.entityType]) end
@@ -64,7 +64,8 @@ end
 function Menu.signature(rows)
     local parts = {}
     for i, row in ipairs(rows) do
-        parts[i] = table.concat({ row.id, row.label or '', row.icon or '', row.iconColor or '', row.divider and 'd' or '' }, '\31')
+        parts[i] = table.concat({ row.id, row.label or '', row.icon or '', row.iconColor or '', row.divider and 'd' or '',
+            row.hold or '', row.submenu and 's' or '' }, '\31')
     end
     return table.concat(parts, '\30')
 end

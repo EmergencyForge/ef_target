@@ -8,7 +8,7 @@ local function stub(name, value)
 end
 
 local boneAt = vec3(1, 2, 3)
-stub('GetEntityBoneIndexByName', function(_, name) return name == 'missing' and -1 or 1 end)
+stub('GetEntityBoneIndexByName', function(_, name) return (name == 'missing' or name == 'handle') and -1 or 1 end)
 stub('GetEntityBonePosition_2', function() return boneAt end)
 stub('GetEntityModel', function() return 77 end)
 stub('GetModelDimensions', function() return vec3(-1, -2, 0), vec3(1, 2, 2) end)
@@ -24,6 +24,8 @@ EFT.Filter = {
 }
 harness.load('client/points.lua')
 local P = EFT.Points
+check('a missing bone falls back when the anchor names one', P.resolve({ anchor = { bone = 'handle', fallback = 'door' } }, 5) ~= nil)
+check('a missing bone without fallback gives nothing', P.resolve({ anchor = { bone = 'handle' } }, 5) == nil)
 
 local function entry(bone, option, source)
     return { anchor = { bone = bone }, options = { option or { label = bone } }, show = 'alt', label = bone, source = source }

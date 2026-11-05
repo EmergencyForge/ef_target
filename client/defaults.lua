@@ -29,10 +29,10 @@ local function useDoor(vehicle, door)
 end
 
 local points = {
-    { door = 0, label = 'Fahrertür', icon = 'fa-solid fa-car-side', anchor = { bone = 'door_dside_f' } },
-    { door = 1, label = 'Beifahrertür', icon = 'fa-solid fa-car-side', anchor = { bone = 'door_pside_f' } },
-    { door = 2, label = 'Tür hinten links', icon = 'fa-solid fa-car-side', anchor = { bone = 'door_dside_r' } },
-    { door = 3, label = 'Tür hinten rechts', icon = 'fa-solid fa-car-side', anchor = { bone = 'door_pside_r' } },
+    { door = 0, label = 'Fahrertür', icon = 'fa-solid fa-car-side', anchor = { bone = 'handle_dside_f', fallback = 'door_dside_f' } },
+    { door = 1, label = 'Beifahrertür', icon = 'fa-solid fa-car-side', anchor = { bone = 'handle_pside_f', fallback = 'door_pside_f' } },
+    { door = 2, label = 'Tür hinten links', icon = 'fa-solid fa-car-side', anchor = { bone = 'handle_dside_r', fallback = 'door_dside_r' } },
+    { door = 3, label = 'Tür hinten rechts', icon = 'fa-solid fa-car-side', anchor = { bone = 'handle_pside_r', fallback = 'door_pside_r' } },
     { door = 4, label = 'Motorhaube', icon = 'fa-solid fa-car', anchor = { offset = vec3(0.5, 1, 0.5), relative = true } },
     { door = 5, label = 'Kofferraum', icon = 'fa-solid fa-car-rear', anchor = { offset = vec3(0.5, 0, 0.5), relative = true } },
 }

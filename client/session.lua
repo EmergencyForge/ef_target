@@ -7,6 +7,10 @@ local state = { menu = nil, history = {} }
 local target, rows, signature, index, shown
 -- What the open menu belongs to. Survives hide: a target lost for one scan is not a new target.
 local focus
+-- The submenus on the way to the open one: their label and the row each was opened from
+local trail = {}
+-- Set until the next show: which way the panel slides and the row to come back to
+local nav, restore
 -- Bumped when a session ends, so a click that outlives its session can tell
 local sessionId = 0
 
@@ -29,10 +33,23 @@ local function focusOf(t)
     return t.zones[1] and 'z' .. t.zones[1].id
 end
 
+local function labels()
+    local out = {}
+    for i, step in ipairs(trail) do out[i] = step.label end
+    return out
+end
+
 function Session.isActive() return active end
 function Session.menu() return state.menu end
 -- True while the panel has rows, a target without allowed options does not count
 function Session.hasTarget() return target ~= nil end
+-- The highlighted row, nil without one, so a hold ends when the selection or the session goes away
+function Session.selected() return active and rows[index] and rows[index].id or nil end
+
+function Session.holdTime()
+    local row = active and rows[index]
+    return row and row.hold
+end
 
 function Session.blocked()
     if disabled or IsPauseMenuActive() or IsNuiFocused() or IsPedDeadOrDying(PlayerPedId(), true) then return true end
@@ -62,6 +79,7 @@ function Session.stop(reason)
     sessionId = sessionId + 1
     -- A new table: a click still running keeps writing to the old one
     state, focus = { history = {} }, nil
+    trail, nav, restore = {}, nil, nil
     EFT.Filter.reset()
     EFT.Nui.hide()
     target, rows, signature, index, shown = nil, {}, nil, 1, false
@@ -77,14 +95,19 @@ function Session.update(newTarget)
     if Session.blocked() then return Session.stop('blocked') end
     if not newTarget then return hide() end
 
-    -- A submenu has no rows on anything else, only its back row would be left
+    -- A submenu belongs to what it was opened on
     local newFocus = focusOf(newTarget)
     if newFocus ~= focus then
         focus = newFocus
-        state.menu, state.history = nil, {}
+        state.menu, state.history, trail = nil, {}, {}
     end
 
     local newRows, title = EFT.Menu.build(newTarget, state)
+    -- An emptied submenu has no row left to back out with
+    if #newRows == 0 and state.menu then
+        state.menu, state.history, trail = nil, {}, {}
+        newRows, title = EFT.Menu.build(newTarget, state)
+    end
     if #newRows == 0 then return hide() end
     local snapped = pointKey(newTarget) and pointKey(target) ~= pointKey(newTarget)
     target = newTarget
@@ -104,13 +127,16 @@ function Session.update(newTarget)
     -- The options of a freshly snapped point come preselected, otherwise the selection follows its option
     local wanted = not snapped and rows and rows[index] and rowKey(rows[index])
     local newIndex = 1
-    if wanted then
+    if restore then
+        newIndex = math.min(restore, #newRows)
+    elseif wanted then
         for i, row in ipairs(newRows) do
             if rowKey(row) == wanted then newIndex = i break end
         end
     end
     rows, signature, index, shown = newRows, sig, newIndex, true
-    EFT.Nui.show(rows, title, index)
+    EFT.Nui.show(rows, title, index, labels(), nav)
+    nav, restore = nil, nil
 end
 
 function Session.wheel(delta)
@@ -119,16 +145,27 @@ function Session.wheel(delta)
     EFT.Nui.select(index)
 end
 
+function Session.back()
+    if not active or not target or not state.menu then return end
+    local previous = table.remove(state.history)
+    state.menu = previous ~= 'home' and previous or nil
+    local step = table.remove(trail)
+    restore, nav = step and step.index, 'pop'
+    signature, rows = nil, {}
+    Session.update(target)
+end
+
 function Session.click()
     if not active or not target or not rows[index] then return end
-    local current, mine = target, sessionId
-    local result = EFT.Select.run(rows[index], current, state)
+    local current, mine, from, row = target, sessionId, index, rows[index]
+    local result = EFT.Select.run(row, current, state)
     if mine ~= sessionId then return end
     if result == 'closed' then
         Session.stop('select')
     elseif result == 'menu' then
+        trail[#trail + 1] = { label = row.label, index = from }
         -- A new menu starts at its first row, so the old selection must not carry over
-        signature, index = nil, 1
+        signature, index, nav = nil, 1, 'push'
         rows = {}
         Session.update(current)
     else

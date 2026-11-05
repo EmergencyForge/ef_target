@@ -12,6 +12,7 @@ function Points.resolve(entry, entity)
     if anchor.coords then return anchor.coords end
     if anchor.bone then
         local index = GetEntityBoneIndexByName(entity, anchor.bone)
+        if index == -1 and anchor.fallback then index = GetEntityBoneIndexByName(entity, anchor.fallback) end
         if index == -1 then return nil end
         return GetEntityBonePosition_2(entity, index)
     end
