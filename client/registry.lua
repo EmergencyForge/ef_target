@@ -126,7 +126,11 @@ function Registry.add(kind, key, options, resource, extra)
     local id = newId()
     local list = buckets[kind][key]
     if not list then list = {}; buckets[kind][key] = list end
-    for _, entry in ipairs(buildEntries(id, resource, options, extra)) do list[#list + 1] = entry end
+    for _, entry in ipairs(buildEntries(id, resource, options, extra)) do
+        -- Global any options have no distance limit, like addGlobalOption in ox_target
+        if kind == 'global' and key == 'any' then entry.unlimited = true end
+        list[#list + 1] = entry
+    end
     bump()
     return id
 end

@@ -48,6 +48,8 @@ R.add('global', 'any', { { name = 'x', label = 'D' } }, 'res_b')
 check('same name replaces within a resource', labelsOf() == 'D')
 R.add('global', 'any', { { name = 'x', label = 'E' } }, 'res_c')
 check('same name in another resource stays', labelsOf() == 'D,E')
+local anyList = R.forEntity(2, 2, 999, nil, false)
+check('any entries are unlimited, typed ones are not', anyList[#anyList].unlimited == true and not anyList[1].unlimited)
 R.removeNames('global', 'any', 'x', 'res_c')
 check('removeNames is scoped to the resource', labelsOf() == 'D')
 
