@@ -5,6 +5,10 @@ EFT.Session = Session
 local active, disabled = false, false
 local state = { menu = nil, history = {} }
 local target, rows, signature, index, shown
+-- What the open menu belongs to. Survives hide: a target lost for one scan is not a new target.
+local focus
+-- Bumped when a session ends, so a click that outlives its session can tell
+local sessionId = 0
 
 local function hide()
     if shown then EFT.Nui.hide() end
@@ -17,6 +21,12 @@ end
 
 local function pointKey(t)
     return t and t.point and t.point.key
+end
+
+local function focusOf(t)
+    if t.point then return t.point.key end
+    if t.entity and t.entity ~= 0 then return t.entity end
+    return t.zones[1] and 'z' .. t.zones[1].id
 end
 
 function Session.isActive() return active end
@@ -38,7 +48,6 @@ end
 function Session.begin()
     if active or Session.blocked() then return false end
     active = true
-    state.menu, state.history = nil, {}
     hide()
     return true
 end
@@ -46,7 +55,9 @@ end
 function Session.stop(reason)
     if not active then return end
     active = false
-    state.menu, state.history = nil, {}
+    sessionId = sessionId + 1
+    -- A new table: a click still running keeps writing to the old one
+    state, focus = { history = {} }, nil
     EFT.Filter.reset()
     EFT.Nui.hide()
     target, rows, signature, index, shown = nil, {}, nil, 1, false
@@ -62,6 +73,13 @@ function Session.update(newTarget)
     if Session.blocked() then return Session.stop('blocked') end
     if not newTarget then return hide() end
 
+    -- A submenu has no rows on anything else, only its back row would be left
+    local newFocus = focusOf(newTarget)
+    if newFocus ~= focus then
+        focus = newFocus
+        state.menu, state.history = nil, {}
+    end
+
     local newRows, title = EFT.Menu.build(newTarget, state)
     if #newRows == 0 then return hide() end
     local snapped = pointKey(newTarget) and pointKey(target) ~= pointKey(newTarget)
@@ -71,6 +89,11 @@ function Session.update(newTarget)
     local sig = EFT.Menu.signature(newRows) .. '\29' .. (title or '')
     if sig == signature then
         rows = newRows
+        -- Split bones of one option give equal rows, the new point still starts at the top
+        if snapped and index ~= 1 then
+            index = 1
+            EFT.Nui.select(index)
+        end
         return
     end
 
@@ -94,8 +117,9 @@ end
 
 function Session.click()
     if not active or not target or not rows[index] then return end
-    local current = target
+    local current, mine = target, sessionId
     local result = EFT.Select.run(rows[index], current, state)
+    if mine ~= sessionId then return end
     if result == 'closed' then
         Session.stop('select')
     elseif result == 'menu' then

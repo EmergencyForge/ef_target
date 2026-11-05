@@ -1,18 +1,18 @@
 -- Keys and per-frame controls of a session. Selection runs on the wheel and left click, there is no NUI focus.
 local CONTROLS = { 14, 15, 16, 17, 24, 25, 37, 140, 141, 142 }
+local FIRE_CONTROLS = { 24, 140, 141, 142 }
 local WHEEL_DOWN, WHEEL_UP, CLICK = 14, 15, 24
 
 local looping, clicking = false, false
 
 local function click()
-    EFT.Session.click()
+    local ok, err = pcall(EFT.Session.click)
     clicking = false
+    if not ok then print('[ef_target] click failed: ' .. tostring(err)) end
 end
 
--- The session can end on its own, through a blocker or a finished option, so the cleanup hangs on this loop and not on the key
-local function frames()
+local function sessionFrames(player)
     local Session = EFT.Session
-    local player = PlayerId()
     while Session.isActive() do
         DisablePlayerFiring(player, true)
         for _, control in ipairs(CONTROLS) do DisableControlAction(0, control, true) end
@@ -25,18 +25,36 @@ local function frames()
         end
         Wait(0)
     end
+end
+
+-- The button is usually still down when a click ends the session, freed controls would fire the drawn weapon.
+-- Disabling comes first, the pressed state of an enabled control reads as false.
+local function holdFire(player)
+    while not EFT.Session.isActive() do
+        DisablePlayerFiring(player, true)
+        for _, control in ipairs(FIRE_CONTROLS) do DisableControlAction(0, control, true) end
+        if not IsDisabledControlPressed(0, CLICK) then return end
+        Wait(0)
+    end
+end
+
+-- The session can end on its own, through a blocker or a finished option, so the cleanup hangs on this loop and not on the key.
+-- A press during the hold finds looping set and comes back in here through the repeat.
+local function frames()
+    local player = PlayerId()
+    repeat
+        sessionFrames(player)
+        EFT.Scan.stop()
+        EFT.Render.setAim(nil)
+        EFT.Render.stop()
+        EFT.Near.sync()
+        holdFire(player)
+    until not EFT.Session.isActive()
     looping = false
-    EFT.Scan.stop()
-    EFT.Render.setAim(nil)
-    EFT.Render.stop()
-    EFT.Nui.pillHide()
-    EFT.Near.sync()
 end
 
 local function start()
     if not EFT.Session.begin() then return end
-    -- An error inside a click must not leave the button dead for good
-    clicking = false
     EFT.Render.start()
     EFT.Near.sync()
     EFT.Scan.start()

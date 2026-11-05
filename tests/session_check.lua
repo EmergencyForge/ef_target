@@ -61,6 +61,81 @@ S.stop('test')
 S.begin(); S.update(sub)
 check('stop resets the menu', sent[#sent].rows[1].id ~= 'builtin:goback')
 
+-- The menu belongs to what it was opened on
+local other = target({ { name = 'other', label = 'Other' } })
+other.entity = 6
+S.click()
+check('the submenu is open', sent[#sent].rows[1].id == 'builtin:goback')
+S.update(other)
+check('another entity drops the submenu', sent[#sent].action == 'show' and sent[#sent].rows[1].label == 'Other' and #sent[#sent].rows == 1)
+S.update(sub)
+check('the first entity starts at home again', sent[#sent].rows[1].id ~= 'builtin:goback')
+S.click()
+S.update(nil); S.update(sub)
+check('a target lost for a moment keeps the submenu', sent[#sent].rows[1].id == 'builtin:goback')
+local onPoint = target({ { name = 'general', label = 'General' } })
+onPoint.point = { key = 'p1', entries = {}, distance = 1.0, entity = 5 }
+S.update(onPoint)
+check('another point drops the submenu', sent[#sent].rows[1].id ~= 'builtin:goback')
+S.stop('test')
+
+-- One option split over bones gives points with equal rows, a new snap still goes back to the top
+local function splitPoint(key)
+    local t = target({ { name = 'general', label = 'General' } })
+    local e = { id = 2, resource = 'r', options = { { name = 'split', label = 'Split' } }, anchor = { bone = key } }
+    t.point = { key = key, entries = { e }, distance = 1.0, entity = 5, label = 'Rad' }
+    return t
+end
+S.begin()
+S.update(splitPoint('wheel_lf'))
+S.wheel(1)
+check('the wheel leaves the first row', sent[#sent].index == 2)
+S.update(splitPoint('wheel_rf'))
+check('a new snap with equal rows selects the first row', sent[#sent].action == 'select' and sent[#sent].index == 1)
+S.stop('test')
+
+-- A click can outlive its session when the option blocks
+local function ranAcross(option)
+    S.begin()
+    S.update(target({ option, B }))
+    local handle = option.onSelect
+    option.onSelect = function(data)
+        S.stop('tapped')
+        S.begin()
+        S.update(two)
+        handle(data)
+    end
+    S.click()
+    option.onSelect = handle
+end
+local before = ran
+ranAcross({ name = 'c', label = 'C', onSelect = run })
+check('a closed result leaves the next session alone', S.isActive() and ran == before + 1)
+count = #sent
+S.wheel(1)
+check('the next session keeps its rows', sent[#sent].action == 'select' and #sent == count + 1)
+S.stop('test')
+ranAcross({ name = 'm', label = 'M', openMenu = 'm2', onSelect = run })
+count = #sent
+S.wheel(1)
+check('a menu result leaves the next session alone', S.isActive() and sent[#sent].action == 'select' and #sent == count + 1)
+S.update(two)
+check('the next session stays at home', sent[#sent].action == 'select' or sent[#sent].rows[1].id ~= 'builtin:goback')
+S.stop('test')
+
+-- A failing option rolls its menu change back, that must not reach the session after it
+local realPrint = print
+_G.print = function() end
+ranAcross({ name = 'e', label = 'E', openMenu = 'm3', onSelect = function()
+    S.update(sub)
+    S.click()
+    error('boom')
+end })
+_G.print = realPrint
+S.update(sub)
+check('a failing old click leaves the new submenu open', S.isActive() and sent[#sent].rows and sent[#sent].rows[1].id == 'builtin:goback')
+S.stop('test')
+
 natives.IsPauseMenuActive = function() return true end
 check('pause menu blocks a start', S.begin() == false)
 natives.IsPauseMenuActive = function() return false end

@@ -55,7 +55,7 @@ function Points.collect(entity, entries, playerCoords)
                 elseif not mergesInto(points, entry, coords) then
                     point = {
                         key = key, coords = coords, label = entry.label, entries = { entry },
-                        show = entry.show, entity = entity, visible = false,
+                        show = entry.show, entity = entity,
                         distance = #(coords - playerCoords),
                     }
                     byKey[key] = point
@@ -88,10 +88,18 @@ function Points.snap(points, radius, aspect)
     return best
 end
 
+-- A point nobody has checked yet goes ahead of the round robin, visible stays nil until then
+local function nextToCheck(points)
+    for _, point in ipairs(points) do
+        if point.visible == nil then return point end
+    end
+    cursor = cursor % #points + 1
+    return points[cursor]
+end
+
 function Points.refresh(points, ctx, now)
     if #points == 0 then return end
-    cursor = cursor % #points + 1
-    local point = points[cursor]
+    local point = nextToCheck(points)
     local distance = #(ctx.playerCoords - point.coords)
     local visible = false
     for _, entry in ipairs(point.entries) do

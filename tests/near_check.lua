@@ -18,8 +18,9 @@ _G.Config = { Key = 'LMENU', UseKey = 'E', Toggle = false, SnapRadius = 0.035, M
 _G.L = function(text) return text end
 _G.json = { encode = function(t) return t end }
 
-local ped, vehicle, ownVehicle, stranger, otherPlayer, crate, invalid = 1, 2000, 2001, 3000, 3001, 4000, 666
+local ped, vehicle, ownVehicle, stranger, otherPlayer, crate, barrel, invalid = 1, 2000, 2001, 3000, 3001, 4000, 4001, 666
 local world = {
+    [barrel] = { type = 3, model = 89, coords = vec3(7, 0, 0) },
     [ped] = { type = 1, model = 10, coords = vec3(0, 0, 0) },
     [vehicle] = { type = 2, model = 77, coords = vec3(1, 0, 0), netId = 50 },
     [ownVehicle] = { type = 2, model = 77, coords = vec3(0, 0, 0) },
@@ -27,7 +28,7 @@ local world = {
     [otherPlayer] = { type = 1, model = 10, coords = vec3(5, 0, 0), netId = 51, player = true },
     [crate] = { type = 3, model = 88, coords = vec3(6, 0, 0) },
 }
-local pools = { CVehicle = { vehicle }, CPed = { ped, stranger, otherPlayer }, CObject = { crate } }
+local pools = { CVehicle = { vehicle }, CPed = { ped, stranger, otherPlayer }, CObject = { crate, barrel } }
 local poolUse = {}
 local function poolCalls(name, fn)
     local before = poolUse[name] or 0
@@ -66,7 +67,7 @@ end
 
 -- Camera sits at (0, -5, 0) looking down +y. A ray of RayLength reads rays[flags], a shorter one is a sight check.
 local camera = vec3(0, -5, 0)
-local rays, sightHit, sightRays, handles = {}, nil, 0, {}
+local rays, sightHit, sightRays, handles, sightTargets, longRays = {}, nil, 0, {}, {}, {}
 local shapeBlocked = false
 local function miss() return { hit = false, entity = 0, coords = vec3(0, 0, 0) } end
 
@@ -77,7 +78,8 @@ for name, offset in pairs(bones) do
     boneIds[name], boneById[nextBone] = nextBone, offset
 end
 
-local justPressed, disabled, fired = {}, {}, 0
+local justPressed, heldDown, disabled, fired, typeCalls = {}, {}, {}, 0, {}
+local instructional, buttonArgs = 't_E', nil
 local inVehicle, paused, doorValid, lockStatus, doorDamaged, doorAngle = 0, false, true, 1, false, 0.0
 local doorCalls, owner, networked = {}, 1, true
 local onScreen = true
@@ -104,6 +106,7 @@ stub({
     GetEntityCoords = function(entity) return world[entity].coords end,
     GetEntityType = function(entity)
         if entity == invalid then error('no such entity') end
+        typeCalls[entity] = (typeCalls[entity] or 0) + 1
         return world[entity] and world[entity].type or 0
     end,
     GetEntityModel = function(entity) return world[entity].model end,
@@ -128,15 +131,22 @@ stub({
     StartShapeTestLosProbe = function(fx, fy, fz, tx, ty, tz, flags)
         local length = #(vec3(tx, ty, tz) - vec3(fx, fy, fz))
         if math.abs(length - Config.RayLength) < 0.001 then
+            longRays[flags] = (longRays[flags] or 0) + 1
             handles[#handles + 1] = rays[flags] or miss()
         else
             sightRays = sightRays + 1
+            sightTargets[#sightTargets + 1] = vec3(tx, ty, tz)
             handles[#handles + 1] = sightHit or miss()
         end
         return #handles
     end,
     GetShapeTestResultIncludingMaterial = function(handle)
         local ray = handles[handle]
+        if ray.pending and ray.pending > 0 then
+            ray.pending = ray.pending - 1
+            return 1, 0, vec3(0, 0, 0), vec3(0, 0, 0), 0, 0
+        end
+        if ray.failed then return 0, 0, vec3(0, 0, 0), vec3(0, 0, 0), 0, 0 end
         return 2, ray.hit and 1 or 0, ray.coords, vec3(0, 0, 1), 0, ray.entity
     end,
     HasEntityClearLosToEntity = function() return not shapeBlocked end,
@@ -144,6 +154,12 @@ stub({
     DisablePlayerFiring = function() fired = fired + 1 end,
     DisableControlAction = function(_, control) disabled[control] = true end,
     IsDisabledControlJustPressed = function(_, control) return justPressed[control] or false end,
+    IsDisabledControlPressed = function(_, control) return heldDown[control] or false end,
+    joaat = function(name) return #name * 256 end,
+    GetControlInstructionalButton = function(pad, hash, flag)
+        buttonArgs = { pad, hash, flag }
+        return instructional
+    end,
 
     CreateRuntimeTxd = function() return 1 end,
     CreateRuntimeTextureFromImage = function() return 1 end,
@@ -163,13 +179,14 @@ stub({
 harness.load('client/eft.lua')
 harness.load('client/geometry.lua')
 harness.load('client/registry.lua')
-EFT.Framework = { hasGroup = function() return true end, hasItems = function() return true end }
+local groupAllowed = true
+EFT.Framework = { hasGroup = function() return groupAllowed end, hasItems = function() return true end }
 for _, file in ipairs({ 'filter', 'points', 'menu', 'select', 'nui', 'session', 'accent', 'spring', 'render', 'scan', 'near', 'input' }) do
     harness.load('client/' .. file .. '.lua')
 end
 local R, N, S, Session, Render = EFT.Registry, EFT.Near, EFT.Scan, EFT.Session, EFT.Render
 
-local aimed, aimHit, aimCalls, drawn = nil, nil, 0, nil
+local aimed, aimHit, aimCalls, drawn, emptySends = nil, nil, 0, nil, 0
 local realAim, realPoints = Render.setAim, Render.setPoints
 Render.setAim = function(point, hit)
     aimed, aimHit, aimCalls = point, hit, aimCalls + 1
@@ -177,6 +194,7 @@ Render.setAim = function(point, hit)
 end
 Render.setPoints = function(list)
     drawn = list
+    if #list == 0 then emptySends = emptySends + 1 end
     return realPoints(list)
 end
 
@@ -224,6 +242,11 @@ check('the first allowed option speaks for the point', N.tick(origin, 4500).opti
 N.use()
 check('use runs the first allowed option', nearRuns == 100)
 
+local submenuFirst = R.add('point', 'coords', { { label = 'Menü', openMenu = 'm' }, { label = 'Direkt', onSelect = function() end } }, 'res',
+    { show = 'near', anchor = { coords = vec3(0.05, 0, 0) } })
+check('the pill skips an option the use key cannot do', N.tick(origin, 4600).option.label == 'Direkt')
+R.remove(submenuFirst)
+
 threads = {}
 sent = {}
 N.sync()
@@ -249,10 +272,30 @@ pump(1)
 check('the pill comes back when the session ends', count('pill') == pills + 2)
 R.remove(spot); R.remove(nearId); R.remove(altFirst)
 N.sync()
-check('no near point left hides the pill', count('pillHide') == 4)
+check('no near point left hides the pill', count('pillHide') == 3)
 check('no near point left stops the markers', not Render.isRunning())
 pump(2)
 threads = {}
+
+-- The pill names the key the player really bound
+local function pillKeyFor(label)
+    instructional = label
+    local id = R.add('point', 'coords', { label = 'Drücken' }, 'res', { show = 'near', anchor = { coords = vec3(0.1, 0, 0) } })
+    N.sync()
+    pump(1)
+    local key = last('pill').key
+    R.remove(id)
+    N.sync()
+    pump(1)
+    threads = {}
+    return key
+end
+check('the pill reads the rebound key', pillKeyFor('t_G') == 'G')
+check('the lookup uses the mapped command', mappings['+ef_target_use'] and buttonArgs and buttonArgs[1] == 0
+    and buttonArgs[2] == (joaat('+ef_target_use') | 0x80000000) and buttonArgs[3] == true)
+check('a button without text falls back to the config key', pillKeyFor('b_116') == 'E')
+check('no answer falls back to the config key', pillKeyFor(nil) == 'E')
+instructional = 't_E'
 
 -- Classify
 check('the own vehicle is no target', (function()
@@ -280,6 +323,7 @@ local function release() commands['-ef_target']() end
 local function ray(flags, entity, coords) rays[flags] = { hit = true, entity = entity, coords = coords } end
 -- One scan spends a frame on each of up to three rays and one in its pacing Wait
 local function scans(times) pump(4 * times) end
+local aimsBefore
 
 -- Scan: target from the rays
 local general = R.add('global', 'vehicle', { name = 'general', label = 'Durchsuchen' }, 'res')
@@ -306,6 +350,20 @@ shapeBlocked = false
 ray(26, stranger, vec3(0, 9, 0))
 scans(2)
 check('the nearer hit counts', S.current() == nil or S.current().entity == nil)
+-- Both hits lie on the camera ray, the second is the nearer one from there and the farther one from the player
+ray(511, 0, vec3(0, 2, 0))
+ray(26, stranger, vec3(0, -4, 0))
+scans(2)
+check('nearer is measured from the camera', S.current() and S.current().entity == stranger)
+rays[511] = { hit = true, entity = vehicle, coords = vec3(1, 0, 0), pending = 1 }
+rays[26] = nil
+aimsBefore, longRays[26] = aimCalls, 0
+repeat pump(1) until aimCalls > aimsBefore + 1
+check('a pending ray is read again', S.current() and S.current().entity == vehicle)
+check('a pending ray is not taken for a miss', longRays[26] <= 1)
+rays[511] = { failed = true }
+scans(2)
+check('a failed ray reads as a miss', S.current() == nil)
 rays[511], rays[26] = nil, nil
 scans(2)
 check('a miss has no target', S.current() == nil and count('hide') >= 1)
@@ -319,7 +377,7 @@ local door = R.add('global', 'vehicle', { name = 'door', label = 'Tür', distanc
 local hood = R.add('global', 'vehicle', { name = 'hood', label = 'Haube', distance = 5.0 }, 'res', { anchor = { bone = 'hood' } })
 local denied = R.add('global', 'vehicle', { name = 'no', label = 'Nein', canInteract = function() return false end }, 'res', { anchor = { bone = 'far' } })
 sightRays = 0
-local aimsBefore = aimCalls
+aimsBefore = aimCalls
 repeat pump(1) until aimCalls > aimsBefore
 check('a new point waits for its first check', #drawn == 0)
 aimsBefore, sightRays = aimCalls, 0
@@ -355,6 +413,9 @@ sightHit = { hit = true, entity = vehicle, coords = vec3(0, -3, 0) }
 scans(8)
 check('a blocked point is not drawn', #drawn == 0)
 check('a blocked point is not snapped', aimed and aimed.key == nil)
+sightHit = { failed = true }
+scans(8)
+check('a failed sight test keeps the old answer', #drawn == 0)
 sightHit = { hit = true, entity = vehicle, coords = world[vehicle].coords + bones.door_dside_f + vec3(0, -0.2, 0) }
 scans(8)
 check('a sight ray stopping at the point counts as clear', #drawn >= 1)
@@ -370,7 +431,7 @@ check('a click runs the selected option', doorRun == 1)
 check('a finished option ends the session', not Session.isActive())
 pump(2)
 check('the end clears the aim', aimed == nil and not Render.isRunning())
-check('the end hides the pill', count('pillHide') == hidesBefore + 1)
+check('the end has no pill left to hide', count('pillHide') == hidesBefore)
 check('the scan forgets its target', S.current() == nil)
 pump(2)
 check('the threads wind down', #threads == 0)
@@ -378,7 +439,67 @@ check('the key stays held without a restart', not Session.isActive())
 release()
 pump(1)
 check('a release after the end is harmless', not Session.isActive() and #threads == 0)
+
+-- The check results of one press carry into the next
+press()
+aimsBefore = aimCalls
+repeat pump(1) until aimCalls > aimsBefore
+check('a second press starts with the known points', #drawn == 2)
+release()
+pump(2)
 R.remove(door); R.remove(hood); R.remove(denied)
+threads = {}
+
+-- Near markers already on screen stay up through a press
+local nearSpot = R.add('point', 'coords', { label = 'Nah' }, 'res', { show = 'near', anchor = { coords = vec3(-1, 0, 0) } })
+threads = {}
+rays[511] = nil
+N.sync()
+emptySends = 0
+press()
+scans(2)
+check('near markers survive the press', emptySends == 0 and #drawn == 1 and drawn[1].key == 'c:-1,0,0')
+release()
+pump(2)
+R.remove(nearSpot)
+N.sync()
+pump(1)
+threads = {}
+
+-- Unchecked points go first in both round robins
+ray(511, 0, vec3(0, 3, 0))
+local settled = {}
+for i = 1, 10 do
+    settled[i] = R.add('point', 'coords', { label = 'S' .. i }, 'res', { anchor = { coords = vec3(-1, 0, i * 0.01) } })
+end
+press()
+scans(30)
+check('the settled points are drawn', #drawn == 10)
+local late = R.add('point', 'coords', { label = 'Spät' }, 'res', { anchor = { coords = vec3(-3, 0, 0) } })
+local closest = R.add('point', 'coords', { label = 'Nächster' }, 'res', { anchor = { coords = vec3(-0.5, 0, 0) } })
+aimsBefore, sightTargets = aimCalls, {}
+repeat pump(1) until aimCalls >= aimsBefore + 3
+check('new points are checked ahead of the others', #drawn == 12)
+-- They sit at both ends of the list, a round robin could not reach both in a row
+check('their sight checks are the next ones out', sightTargets[1] and sightTargets[1].x == -0.5 and sightTargets[2] and sightTargets[2].x == -3)
+release()
+pump(2)
+for _, id in ipairs(settled) do R.remove(id) end
+R.remove(late); R.remove(closest)
+
+-- An entity without points costs nothing between walks
+local boxes = R.add('model', 88, { label = 'Kiste' }, 'res', { anchor = { offset = vec3(0, 0, 0), relative = false } })
+rays[511] = nil
+press()
+scans(4)
+local classifiedBefore = typeCalls[barrel] or 0
+pump(40)
+check('an entity without points is left out of the scans', (typeCalls[barrel] or 0) - classifiedBefore <= 5)
+check('an entity with points stays in', #drawn == 1)
+release()
+pump(2)
+R.remove(boxes)
+threads = {}
 
 -- Scan: limits and zones
 sent = {}
@@ -410,6 +531,39 @@ release()
 pump(2)
 for _, id in ipairs(cloud) do R.remove(id) end
 R.removeZone(sphere); R.removeZone(hiddenZone); R.removeZone(farZone)
+threads = {}
+
+-- Points out of reach must not crowd out a reachable one behind them
+local crowd = {}
+for i = 1, 24 do
+    crowd[i] = R.add('point', 'coords', { label = 'Eng', distance = 0.5 }, 'res', { anchor = { coords = vec3(-1, 0, i * 0.01) } })
+end
+local atm = R.add('point', 'coords', { label = 'Automat' }, 'res', { anchor = { coords = vec3(-6.5, 0, 0) } })
+press()
+scans(6)
+check('a far reachable point is drawn past nearer out of reach ones', #drawn == 1 and drawn[1].coords.x == -6.5)
+release()
+pump(2)
+for _, id in ipairs(crowd) do R.remove(id) end
+R.remove(atm)
+threads = {}
+
+-- A zone marker follows the same rule as a point: no allowed option, no marker
+local gated = R.addZone({ coords = vec3(-1, 0, 0), radius = 1.0, options = { { label = 'Fraktion', groups = 'police' } } }, 'res')
+groupAllowed = false
+press()
+scans(2)
+check('a zone only for others has no marker', #drawn == 0)
+groupAllowed = true
+scans(2)
+check('a zone with an allowed option has its marker', #drawn == 1 and drawn[1].noSnap)
+world[ped].coords = vec3(-15, 0, 0)
+scans(2)
+check('a zone out of option reach has no marker', #drawn == 0)
+world[ped].coords = vec3(0, 0, 0)
+release()
+pump(2)
+R.removeZone(gated)
 threads = {}
 
 -- Input: the session and its controls
@@ -494,9 +648,88 @@ check('a second click waits for the running option', slowRuns == 1)
 release()
 pump(2)
 check('the end does not wait for a running option', aimed == nil and not Render.isRunning())
+
+-- The old click is still running when the next session starts
+press()
+scans(2)
+justPressed[24] = true
+pump(3)
+justPressed[24] = false
+check('a new session runs no second click meanwhile', slowRuns == 1)
 holding = false
 pump(2)
 check('the option finishes on its own thread', resumed)
+check('the old click leaves the new session alone', Session.isActive())
+scans(1)
+justPressed[24] = true
+pump(1)
+justPressed[24] = false
+pump(2)
+check('clicks work again afterwards', not Session.isActive())
+pump(2)
+threads = {}
+
+-- An error inside a click must not leave the button dead
+local realClick, realPrintClick = Session.click, print
+local clicks = 0
+Session.click = function() clicks = clicks + 1; error('boom') end
+_G.print = function() end
+press()
+scans(2)
+justPressed[24] = true
+pump(1)
+justPressed[24] = false
+pump(2)
+justPressed[24] = true
+pump(1)
+justPressed[24] = false
+pump(2)
+_G.print = realPrintClick
+Session.click = realClick
+check('a click that failed frees the button', clicks == 2 and Session.isActive())
+release()
+pump(2)
+threads = {}
+
+-- Selecting with a weapon drawn: the button is still down when the session ends
+press()
+scans(2)
+heldDown[24] = true
+justPressed[24] = true
+pump(1)
+justPressed[24] = false
+pump(2)
+check('the click ended the session', not Session.isActive())
+fired, disabled = 0, {}
+pump(2)
+check('firing stays held back while the button is down', fired >= 2 and disabled[24] and disabled[140] and disabled[141] and disabled[142])
+check('only the attack controls stay blocked', not disabled[14] and not disabled[25])
+press()
+pump(1)
+justPressed[14] = true
+scans(1)
+justPressed[14] = false
+check('a press during the hold re-enters the running loop', last('select') ~= nil and Session.isActive())
+heldDown[24] = false
+release()
+pump(2)
+check('the hold leaves nothing running', #threads == 0)
+fired, disabled = 0, {}
+pump(2)
+check('the controls come free once the button is up', fired == 0 and not disabled[24])
+
+press()
+scans(2)
+heldDown[24] = true
+release()
+pump(2)
+fired = 0
+pump(1)
+check('releasing Alt during a click holds fire too', fired == 1)
+heldDown[24] = false
+pump(2)
+check('that hold ends with the button', #threads == 0)
+
 R.remove(slow); R.remove(second); R.remove(general)
 threads = {}
 

@@ -40,7 +40,7 @@ check('coords anchors need no entity', P.resolve({ anchor = { coords = vec3(4, 5
 local pts = P.collect(5, { entry('door'), entry('door'), entry('wheel'), { options = { { label = 'general' } } } }, vec3(0, 0, 0))
 check('two scripts on one bone share a point', #pts == 2 and #pts[1].entries == 2 and pts[1].key == '5:b:door')
 check('entries without an anchor stay out', #pts == 2)
-check('a point starts invisible with its label', pts[1].visible == false and pts[1].label == 'door' and pts[1].entity == 5)
+check('a point starts unchecked with its label', pts[1].visible == nil and pts[1].label == 'door' and pts[1].entity == 5)
 check('unresolvable anchors are dropped', #P.collect(5, { entry('missing') }, vec3(0, 0, 0)) == 0)
 
 local cpts = P.collect(nil, { { anchor = { coords = vec3(1, 2, 3) }, options = { {} } } }, vec3(0, 0, 0))
@@ -100,6 +100,12 @@ P.refresh({ rp('a') }, { playerCoords = vec3(0, 0, 0), menu = 'sub' }, 1000)
 check('the menu is passed to the static filter', interactCalls == 0)
 P.refresh({}, ctx, 1000)
 check('an empty list is fine', true)
+
+local waiting = rp('fresh')
+waiting.visible = nil
+local settledList = { rp('a'), rp('b'), waiting }
+P.refresh(settledList, ctx, 1000)
+check('an unchecked point goes first', waiting.visible == true and not settledList[1].visible and not settledList[2].visible)
 
 for i = #saved, 1, -1 do harness.natives[saved[i][1]] = saved[i][2] end
 harness.resetEFT()

@@ -7,6 +7,7 @@ local SCAN_MS = 50
 local WALK_MS = 500
 local FLAGS_ALL, FLAGS_ENTITIES = 511, 26
 local IGNORE_NO_COLLISION = 4
+local SHAPE_FAILED, SHAPE_PENDING = 0, 1
 -- Doors and hoods sit inside the bodywork, so a sight ray ending this close to a point has reached it
 local SIGHT_TOLERANCE = 1.0
 -- Render reads a table without coords as "draw at the screen centre"
@@ -45,12 +46,23 @@ local function gamePools(pools, show)
     return wanted
 end
 
--- Entities in reach that can carry points, pools are the result of Registry.nearPools or pointPools
+local function anchored(entries, show)
+    local out = {}
+    for _, entry in ipairs(entries) do
+        if entry.anchor and (not show or entry.show == show) then out[#out + 1] = entry end
+    end
+    return out
+end
+
+-- Entities in reach that carry points, pools are the result of Registry.nearPools or pointPools.
+-- Only carriers come back, so everything that runs per scan stays clear of the bare entities in a pool.
 function Scan.pointEntities(pools, show, center)
     local out, seen = {}, {}
     local function add(entity)
-        if not seen[entity] and #(GetEntityCoords(entity) - center) <= Config.RayLength then
-            seen[entity] = true
+        if seen[entity] or #(GetEntityCoords(entity) - center) > Config.RayLength then return end
+        seen[entity] = true
+        local entityType, model, netId, isPlayer = Scan.classify(entity)
+        if entityType and #anchored(EFT.Registry.forEntity(entity, entityType, model, netId, isPlayer), show) > 0 then
             out[#out + 1] = entity
         end
     end
@@ -66,14 +78,6 @@ function Scan.pointEntities(pools, show, center)
         for _, handle in ipairs(EFT.Registry.pointKeys('local', show)) do
             if DoesEntityExist(handle) then add(handle) end
         end
-    end
-    return out
-end
-
-local function anchored(entries, show)
-    local out = {}
-    for _, entry in ipairs(entries) do
-        if entry.anchor and (not show or entry.show == show) then out[#out + 1] = entry end
     end
     return out
 end
@@ -95,18 +99,18 @@ function Scan.collectPoints(entities, show, playerCoords)
     return out
 end
 
--- Returns hit, entity, coords
+-- Returns hit, entity, coords, status
 local function probe(from, to, flags, ignore)
     local handle = StartShapeTestLosProbe(from.x, from.y, from.z, to.x, to.y, to.z, flags, ignore, IGNORE_NO_COLLISION)
     while true do
         Wait(0)
         local status, hit, coords, _, _, entity = GetShapeTestResultIncludingMaterial(handle)
-        if status ~= 1 then return hit == true or hit == 1, entity, coords end
+        if status ~= SHAPE_PENDING then return hit == true or hit == 1, entity, coords, status end
     end
 end
 
 -- Returns the entity under the crosshair, nil if there is none, and the hit position, nil on a miss
-local function cast(ped, playerCoords)
+local function cast(ped)
     local from, direction = GetWorldCoordFromScreenCoord(0.5, 0.5)
     local to = from + direction * Config.RayLength
     local hit, entity, coords = probe(from, to, FLAGS_ALL, ped)
@@ -114,14 +118,29 @@ local function cast(ped, playerCoords)
     if not hit then coords = nil end
 
     local hit2, entity2, coords2 = probe(from, to, FLAGS_ENTITIES, ped)
-    if not hit2 or (coords and #(coords2 - playerCoords) >= #(coords - playerCoords)) then return nil, coords end
+    if not hit2 or (coords and #(coords2 - from) >= #(coords - from)) then return nil, coords end
     if not Scan.classify(entity2) then return nil, coords2 end
     -- This flag set can reach through walls
     if HasEntityClearLosToEntity(entity2, ped, 7) then return entity2, coords2 end
     return nil, coords
 end
 
--- collect builds new tables each scan, the check results of a key have to move over
+local function anyStatic(options, distance, menu)
+    for _, option in ipairs(options) do
+        if EFT.Filter.static(option, distance, menu) then return true end
+    end
+    return false
+end
+
+local function reachable(point, menu)
+    for _, entry in ipairs(point.entries) do
+        if anyStatic(entry.options, point.distance, menu) then return true end
+    end
+    return false
+end
+
+-- collect builds new tables each scan, the check results of a key have to move over.
+-- Points that fail the static filter drop out before the limit: door points of every vehicle in range would crowd out the rest.
 local function updatePoints(entity, playerCoords, now)
     if now >= nextWalk then
         nextWalk = now + WALK_MS
@@ -132,30 +151,34 @@ local function updatePoints(entity, playerCoords, now)
         if other ~= entity then entities[#entities + 1] = other end
     end
 
-    local fresh = {}
-    local points = Scan.collectPoints(entities, nil, playerCoords)
-    for _, point in ipairs(points) do
-        local old = known[point.key]
-        if old then point.visible, point.clear = old.visible, old.clear end
-        fresh[point.key] = point
+    local menu = EFT.Session.menu()
+    local fresh, points = {}, {}
+    for _, point in ipairs(Scan.collectPoints(entities, nil, playerCoords)) do
+        if reachable(point, menu) then
+            local old = known[point.key]
+            if old then point.visible, point.clear = old.visible, old.clear end
+            fresh[point.key] = point
+            points[#points + 1] = point
+        end
     end
     known = fresh
 
     local checked = EFT.Points.pick(points, Config.MaxPoints)
-    EFT.Points.refresh(checked, { playerCoords = playerCoords, menu = EFT.Session.menu() }, now)
+    EFT.Points.refresh(checked, { playerCoords = playerCoords, menu = menu }, now)
     return checked
 end
 
 -- What gets drawn, which is also all that can be snapped to
 local function drawList(checked, playerCoords)
+    local menu = EFT.Session.menu()
     local list = {}
     for _, point in ipairs(checked) do
         if point.visible and point.clear then list[#list + 1] = point end
     end
     for _, zone in ipairs(EFT.Registry.zoneGrid:near(playerCoords, Config.RayLength)) do
-        if zone.drawSprite ~= false then
-            list[#list + 1] = { key = 'zone:' .. zone.id, coords = zone.center, distance = #(zone.center - playerCoords),
-                noSnap = true, visible = true }
+        local distance = #(zone.center - playerCoords)
+        if zone.drawSprite ~= false and anyStatic(zone.options, distance, menu) then
+            list[#list + 1] = { key = 'zone:' .. zone.id, coords = zone.center, distance = distance, noSnap = true, visible = true }
         end
     end
     list = EFT.Points.pick(list, Config.MaxPoints)
@@ -202,15 +225,24 @@ local function buildTarget(entity, coords, playerCoords, zones, point)
     return target
 end
 
+local function nextSight(candidates)
+    for _, point in ipairs(candidates) do
+        if point.clear == nil then return point end
+    end
+    sightCursor = sightCursor % #candidates + 1
+    return candidates[sightCursor]
+end
+
 local function checkSight(checked, ped)
     local candidates = {}
     for _, point in ipairs(checked) do
         if point.visible then candidates[#candidates + 1] = point end
     end
     if #candidates == 0 then return end
-    sightCursor = sightCursor % #candidates + 1
-    local point = candidates[sightCursor]
-    local hit, _, coords = probe(GetWorldCoordFromScreenCoord(0.5, 0.5), point.coords, FLAGS_ALL, ped)
+    local point = nextSight(candidates)
+    local hit, _, coords, status = probe(GetWorldCoordFromScreenCoord(0.5, 0.5), point.coords, FLAGS_ALL, ped)
+    -- No answer is not a clear view, the last real one stands
+    if status == SHAPE_FAILED then return end
     point.clear = not hit or #(coords - point.coords) < SIGHT_TOLERANCE
 end
 
@@ -218,7 +250,7 @@ local function step(mine)
     local Session = EFT.Session
     local ped = PlayerPedId()
     local playerCoords = GetEntityCoords(ped)
-    local entity, coords = cast(ped, playerCoords)
+    local entity, coords = cast(ped)
     -- The rays take frames and setAim has no guard of its own, so nothing may be drawn for a finished session
     if mine ~= generation or not Session.isActive() then return end
 
@@ -237,7 +269,8 @@ end
 function Scan.start()
     generation = generation + 1
     local mine = generation
-    known, walked, nextWalk, current = {}, {}, 0, nil
+    -- known stays: the check results of the last press save the next one from starting at zero
+    walked, nextWalk, current = {}, 0, nil
     CreateThread(function()
         while mine == generation and EFT.Session.isActive() do
             local started = GetGameTimer()
@@ -250,6 +283,14 @@ end
 function Scan.stop()
     generation = generation + 1
     current = nil
+end
+
+-- Near markers are on screen already, so a session takes them over as checked instead of blinking them off
+function Scan.adopt(points)
+    for _, point in ipairs(points) do
+        point.visible, point.clear = true, true
+        known[point.key] = point
+    end
 end
 
 function Scan.current()

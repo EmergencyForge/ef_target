@@ -10,11 +10,16 @@ local nearby, nearest = {}, nil
 local pillLabel = nil
 local ticking, framing = false, false
 
+-- The use key has no panel, so an option that only opens a submenu has nothing to run
+local function usable(option)
+    return not option.openMenu or option.onSelect or option.export or option.event or option.serverEvent or option.command
+end
+
 local function firstAllowed(point, now)
     for _, entry in ipairs(point.entries) do
         local ctx = EFT.Menu.context({ point = point, entry = entry })
         for _, option in ipairs(entry.options) do
-            if EFT.Filter.static(option, point.distance, nil) and EFT.Filter.interact(option, ctx, now) then
+            if usable(option) and EFT.Filter.static(option, point.distance, nil) and EFT.Filter.interact(option, ctx, now) then
                 return option, entry
             end
         end
@@ -47,6 +52,12 @@ local function hidePill()
     end
 end
 
+-- The player can rebind the key in the game settings, the config only holds its default
+local function useKey()
+    local button = GetControlInstructionalButton(0, joaat('+ef_target_use') | 0x80000000, true)
+    return button and button:match('^t_(.+)$') or Config.UseKey
+end
+
 local function pillFrames()
     while nearest do
         local point = nearest
@@ -59,7 +70,7 @@ local function pillFrames()
             local label = point.option.label or ''
             if pillLabel ~= label then
                 pillLabel = label
-                EFT.Nui.pill(Config.UseKey, label)
+                EFT.Nui.pill(useKey(), label)
             end
         else
             hidePill()
@@ -78,6 +89,7 @@ function Near.sync()
         if #nearby > 0 then
             if not Render.isRunning() then Render.start() end
             Render.setPoints(nearby)
+            EFT.Scan.adopt(nearby)
         elseif Render.isRunning() then
             Render.stop()
         end
