@@ -19,19 +19,9 @@ local function copy(source)
     return out
 end
 
--- 'all' is no requirement in qb. Next to other entries only it goes, their grades still count.
+-- The string 'all' is no requirement in qb. Tables stay: qb looks them up by the player's job, 'all' means nothing there.
 local function withoutAll(filter)
-    if filter == 'all' then return nil end
-    if type(filter) ~= 'table' then return filter end
-    local out = {}
-    for k, v in pairs(filter) do
-        if type(k) == 'number' then
-            if v ~= 'all' then out[#out + 1] = v end
-        elseif k ~= 'all' then
-            out[k] = v
-        end
-    end
-    return next(out) and out or nil
+    if filter ~= 'all' then return filter end
 end
 
 local function inGroup(filter)

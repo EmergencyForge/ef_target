@@ -290,16 +290,16 @@ check('job all passes', shown({ job = 'all' }))
 check('gang all passes', shown({ gang = 'all' }))
 check('job all leaves no group behind', convert({ options = { { label = 'A', job = 'all' } } })[1].groups == nil)
 check('gang all needs no guard', convert({ options = { { label = 'A', gang = 'all' } } })[1].guard == nil)
-check('an all entry in an array goes', shown({ job = { 'all' } }))
-check('an all key in a map goes', shown({ job = { all = 0 } }))
-local mapped = convert({ options = { { label = 'A', job = { all = 0, police = 3 } } } })[1]
-check('grades next to an all key stay', mapped.groups.police == 3 and mapped.groups.all == nil)
-check('and they still count', not shown({ job = { all = 0, police = 3 } }) and shown({ job = { all = 0, police = 2 } }))
-check('an all entry leaves the other array entries', convert({ options = { { label = 'A', job = { 'all', 'police' } } } })[1].groups[1] == 'police')
-check('gang grades next to an all key stay', not shown({ gang = { all = 0, ballas = 2 } }) and shown({ gang = { all = 0, ballas = 1 } }))
-local jobAll = { label = 'A', job = { all = 0 } }
-convert({ options = { jobAll } })
-check('dropping all leaves the given table alone', jobAll.job.all == 0)
+-- Only the string passes: qb looks tables up by the player's job, so all in a table is a restriction nobody meets
+check('all in a job array stays hidden', not shown({ job = { 'all' } }))
+check('all as a job key stays hidden', not shown({ job = { all = 0 } }))
+check('all in a gang array stays hidden', not shown({ gang = { 'all' } }))
+check('all as a gang key stays hidden', not shown({ gang = { all = 0 } }))
+check('all as a jobType key stays hidden', not shown({ jobType = { all = true } }))
+local jobTable = { all = 0, police = 3 }
+check('a job table arrives untouched', convert({ options = { { label = 'A', job = jobTable } } })[1].groups == jobTable)
+check('grades next to an all key count', not shown({ job = { all = 0, police = 3 } }) and shown({ job = { all = 0, police = 2 } }))
+check('gang grades next to an all key count', not shown({ gang = { all = 0, ballas = 2 } }) and shown({ gang = { all = 0, ballas = 1 } }))
 
 -- No answer from the framework hides an option, unlike groups and items
 bootFramework('none')
