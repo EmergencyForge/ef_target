@@ -48,7 +48,13 @@ end
 for _, name in ipairs({ 'ox_core', 'es_extended', 'qbx_core', 'qb-core' }) do
     if GetResourceState(name) == 'started' then
         fw.name = name
-        fw.adapters[name](fw)
+        local ok, err = pcall(fw.adapters[name], fw)
+        if not ok then
+            -- A broken adapter must not take the whole client script down
+            print(('ef_target: framework adapter %s failed: %s'):format(name, tostring(err)))
+            fw.name = nil
+            groups, items = {}, {}
+        end
         break
     end
 end

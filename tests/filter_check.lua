@@ -70,5 +70,28 @@ end })
 fw = boot()
 check('ox_inventory is the item source', fw.hasItems({ key = 2 }) and not fw.hasItems('bread'))
 
+-- ox_core: snapshot at load, then events; a nil grade removes the group
+_G.GetResourceState = function(name) return name == 'ox_core' and 'started' or 'missing' end
+_G.exports = setmetatable({}, { __index = function()
+    return { GetPlayer = function() return { groups = { police = 2, mech = 1 } } end }
+end })
+fw, F = boot()
+check('ox_core: groups present before the first event', fw.hasGroup({ police = 2 }) and fw.hasGroup('mech'))
+handlers['ox:setGroup']('police', 3)
+check('ox_core: setGroup updates the grade', fw.hasGroup({ police = 3 }))
+handlers['ox:setGroup']('police', nil)
+check('ox_core: a nil grade removes the group', not fw.hasGroup('police') and fw.hasGroup('mech'))
+
+-- an adapter that throws must not abort loading
+_G.GetResourceState = function(name) return name == 'es_extended' and 'started' or 'missing' end
+_G.exports = setmetatable({}, { __index = function() error('boom') end })
+local realPrint = print
+local warned
+_G.print = function(msg) if tostring(msg):find('adapter', 1, true) then warned = true else realPrint(msg) end end
+local okBoot = pcall(boot)
+_G.print = realPrint
+check('a throwing adapter does not abort loading', okBoot and warned == true)
+check('after a failed adapter nothing is filtered', EFT.Framework.name == nil and EFT.Framework.hasGroup('police'))
+
 for i = #saved, 1, -1 do _G[saved[i][1]] = saved[i][2] end
 harness.resetEFT()
