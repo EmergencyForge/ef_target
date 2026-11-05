@@ -87,8 +87,9 @@ end
 -- extra.anchor puts every option on one anchor. Otherwise bones and offset split an option into one entry per anchor.
 local function buildEntries(id, resource, options, extra)
     local show = extra.show or 'alt'
-    local function entry(list, anchor)
-        return { id = id, resource = resource, options = list, anchor = anchor, show = show, label = extra.label }
+    -- source is the option an entry was split from, so points can merge close anchors of one option only
+    local function entry(list, anchor, source)
+        return { id = id, resource = resource, options = list, anchor = anchor, show = show, label = extra.label, source = source }
     end
     if extra.anchor then return { entry(options, extra.anchor) } end
 
@@ -98,10 +99,10 @@ local function buildEntries(id, resource, options, extra)
         if type(bones) == 'string' then bones = { bones } end
         if bones then
             for _, bone in ipairs(bones) do
-                entries[#entries + 1] = entry({ copyOption(option) }, { bone = bone })
+                entries[#entries + 1] = entry({ copyOption(option) }, { bone = bone }, option)
             end
         elseif option.offset then
-            entries[#entries + 1] = entry({ copyOption(option) }, { offset = option.offset, relative = not option.absoluteOffset })
+            entries[#entries + 1] = entry({ copyOption(option) }, { offset = option.offset, relative = not option.absoluteOffset }, option)
         else
             plain[#plain + 1] = option
         end

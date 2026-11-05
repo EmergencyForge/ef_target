@@ -31,6 +31,14 @@ check('show defaults to alt', R.forEntity(1, 3, 123, nil, false)[1].show == 'alt
 R.add('global', 'vehicle', { { label = 'B', bones = { 'wheel_lf', 'wheel_rf' } } }, 'res_a')
 local e = R.forEntity(2, 2, 999, nil, false)
 check('a bone list gives one entry per bone', #e == 2 and e[1].anchor.bone == 'wheel_lf' and e[2].anchor.bone == 'wheel_rf')
+check('split entries point back at their option', e[1].source == e[2].source and e[1].source.label == 'B'
+    and e[1].options[1] ~= e[1].source)
+check('anchored entries carry no source', (function()
+    R.add('point', 'coords', { label = 'src' }, 'res_src', { anchor = { coords = vec3(0, 0, 0) } })
+    local entry = R.coordsEntries()[1]
+    R.removeResource('res_src')
+    return entry.source == nil
+end)())
 check('a bone string gives one entry', anchorOf({ label = 'x', bones = 'door_dside_f' }).bone == 'door_dside_f')
 check('old offsets are relative', anchorOf({ label = 'x', offset = vec3(0.5, 1, 0.5) }).relative == true)
 check('absoluteOffset is kept', anchorOf({ label = 'x', offset = vec3(0, 1, 0), absoluteOffset = true }).relative == false)
