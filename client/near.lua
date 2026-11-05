@@ -115,9 +115,12 @@ local reported = {}
 -- An error in one tick must not end the thread, or ticking stays true and no later near point ever starts another
 local function safeSync()
     local ok, err = pcall(Near.sync)
-    if not ok and not reported[err] then
+    if ok then return end
+    -- error(nil) is legal and nil cannot index a table
+    err = tostring(err)
+    if not reported[err] then
         reported[err] = true
-        print(('[ef_target] near check failed: %s'):format(tostring(err)))
+        print(('[ef_target] near check failed: %s'):format(err))
     end
 end
 
