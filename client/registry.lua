@@ -123,7 +123,8 @@ function Registry.add(kind, key, options, resource, extra)
     end
     if #names > 0 then Registry.removeNames(kind, key, names, resource) end
 
-    local id = newId()
+    -- extra.id joins several keys under one id, so one Remove covers a whole model list
+    local id = extra.id or newId()
     local list = buckets[kind][key]
     if not list then list = {}; buckets[kind][key] = list end
     for _, entry in ipairs(buildEntries(id, resource, options, extra)) do
@@ -149,10 +150,28 @@ function Registry.addEntity(entity, options, resource, extra)
     return Registry.add('local', entity, options, resource, extra)
 end
 
+function Registry.removeKey(kind, key)
+    purge(function() return false end, kind, key)
+end
+
 function Registry.removeEntities(netIds)
-    for _, netId in ipairs(netIds) do
-        purge(function() return false end, 'entity', netId)
+    for _, netId in ipairs(netIds) do Registry.removeKey('entity', netId) end
+end
+
+-- The options on one key, nil when there are none. An option split over several bones counts once.
+function Registry.optionsOf(kind, key)
+    local list = buckets[kind][key]
+    if not list then return nil end
+    local out, seen = {}, {}
+    for _, entry in ipairs(list) do
+        for _, option in ipairs(entry.source and { entry.source } or entry.options) do
+            if not seen[option] then
+                seen[option] = true
+                out[#out + 1] = option
+            end
+        end
     end
+    return out
 end
 
 local function append(out, list)
@@ -239,6 +258,9 @@ function Registry.addZone(zone, resource)
     local copy = {}
     for k, v in pairs(zone) do copy[k] = v end
     copy.options = Registry.normalize(zone.options)
+    -- Scripts also pass vector4 and plain tables, and the scan does vector math on the centre
+    local c = zone.coords
+    if c then copy.coords = vec3(c.x or c[1], c.y or c[2], c.z or c[3]) end
     if copy.name ~= nil and zonesByName[copy.name] then Registry.removeZone(copy.name) end
     copy.id, copy.resource = newId(), resource
 
