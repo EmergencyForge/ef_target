@@ -29,6 +29,8 @@ harness.natives.NetworkGetEntityOwner = function(handle) return owners[handle] o
 entities[50], netIds[5], owners[50] = vec3(0, 0, 0), 50, 8
 local function pedAt(source, coords) peds[source] = 900 + source; entities[900 + source] = coords end
 
+local types = {}
+harness.natives.GetEntityType = function(handle) return types[handle] or 2 end
 local events = {}
 harness.natives.RegisterNetEvent = function(name, fn) events[name] = fn end
 local server = harness.load('server/main.lua')
@@ -65,7 +67,23 @@ entities[50], netIds[5] = vec3(0, 0, 0), 50
 track(1, 5); netIds[5] = nil; netIds[6] = 50; sweep()
 check('a handle that changed net id counts as gone', #removed == 2 and removed[2][1] == 5)
 
-for _, name in ipairs({ 'RegisterNetEvent', 'AddEventHandler', 'CreateThread', 'TriggerClientEvent', 'NetworkGetEntityFromNetworkId',
+-- A net id reused before the sweep must not be announced for the new entity
+removed = {}
+entities[50], entities[51], netIds[5], netIds[6] = nil, vec3(0, 0, 0), 50, nil
+entities[50] = vec3(0, 0, 0)
+track(1, 5); entities[50] = nil; netIds[5] = 51
+track(1, 5); sweep()
+check('a reused net id is not announced for the live entity', #removed == 0 and server.trackedCount() == 1)
+netIds[5] = nil; sweep()
+check('the reused entry is announced once it is gone', #removed == 1 and server.trackedCount() == 0)
+
+-- A client can send the net id of anything, only vehicles have doors
+types[60], entities[60], netIds[7], owners[60] = 1, vec3(0, 0, 0), 60, 8
+relayed = {}
+door(1, 7, 0)
+check('a non vehicle entity relays nothing', #relayed == 0)
+
+for _, name in ipairs({ 'GetEntityType', 'RegisterNetEvent', 'AddEventHandler', 'CreateThread', 'TriggerClientEvent', 'NetworkGetEntityFromNetworkId',
     'NetworkGetNetworkIdFromEntity', 'DoesEntityExist', 'GetEntityCoords', 'GetPlayerPed', 'NetworkGetEntityOwner' }) do
     _G[name] = nil
 end

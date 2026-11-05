@@ -114,14 +114,18 @@ local function has(entity, netId, label) return labelsFor(entity, netId):find(',
 harness.natives.NetworkGetEntityIsNetworked = function(entity) return entity >= 100 end
 harness.natives.NetworkGetNetworkIdFromEntity = function(entity) return entity - 90 end
 harness.natives.TriggerServerEvent = function(event, netId) tracked[#tracked + 1] = { event, netId } end
+local timers = {}
+harness.natives.SetTimeout = function(_, fn) timers[#timers + 1] = fn end
 R.addEntity(100, { label = 'N' }, 'res_n')
 R.addEntity(7, { label = 'L' }, 'res_n')
 check('a networked entity is keyed by net id and reported', has(100, 10, 'N')
     and #tracked == 1 and tracked[1][1] == 'ef_target:trackEntity' and tracked[1][2] == 10)
-check('a local entity is keyed by handle and not reported', has(7, nil, 'L') and #tracked == 1)
+for _, fn in ipairs(timers) do fn() end
+check('the report is repeated once for a server that was not ready', #timers == 1 and #tracked == 2 and tracked[2][2] == 10)
+check('a local entity is keyed by handle and not reported', has(7, nil, 'L') and #tracked == 2)
 R.removeEntities({ 10, 11 })
 check('removeEntities drops the net id entries only', not has(100, 10, 'N')
     and has(7, nil, 'L'))
-for _, name in ipairs({ 'NetworkGetEntityIsNetworked', 'NetworkGetNetworkIdFromEntity', 'TriggerServerEvent' }) do _G[name] = nil end
+for _, name in ipairs({ 'NetworkGetEntityIsNetworked', 'NetworkGetNetworkIdFromEntity', 'TriggerServerEvent', 'SetTimeout' }) do _G[name] = nil end
 
 harness.resetEFT()

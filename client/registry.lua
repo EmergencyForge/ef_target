@@ -142,6 +142,8 @@ function Registry.addEntity(entity, options, resource, extra)
     if NetworkGetEntityIsNetworked(entity) then
         local netId = NetworkGetNetworkIdFromEntity(entity)
         TriggerServerEvent('ef_target:trackEntity', netId)
+        -- The server may not know a fresh entity yet and drops the first report, it dedupes the second
+        SetTimeout(2000, function() TriggerServerEvent('ef_target:trackEntity', netId) end)
         return Registry.add('entity', netId, options, resource, extra)
     end
     return Registry.add('local', entity, options, resource, extra)

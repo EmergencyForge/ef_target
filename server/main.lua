@@ -5,6 +5,7 @@ local TRACK_EVENT = 'ef_target:trackEntity'
 local REMOVE_EVENT = 'ef_target:removeEntities'
 local MAX_DISTANCE = 10.0
 local MAX_DOOR = 5
+local VEHICLE_TYPE = 2
 local SWEEP_INTERVAL = 10000
 
 local Server = {}
@@ -27,7 +28,7 @@ end
 function Server.toggleDoor(source, netId, door)
     if not isInteger(source) or not isInteger(door) or door < 0 or door > MAX_DOOR then return end
     local vehicle = resolve(netId)
-    if not vehicle then return end
+    if not vehicle or GetEntityType(vehicle) ~= VEHICLE_TYPE then return end
 
     local ped = GetPlayerPed(source)
     if not ped or ped == 0 or not DoesEntityExist(ped) then return end
@@ -42,9 +43,10 @@ end
 function Server.trackEntity(source, netId)
     if not isInteger(source) then return end
     local handle = resolve(netId)
-    if not handle or tracked[netId] then return end
+    if not handle or tracked[netId] == handle then return end
+    -- A net id can be reused before the sweep ran, so a different handle replaces the stale claim
+    if not tracked[netId] then count = count + 1 end
     tracked[netId] = handle
-    count = count + 1
 end
 
 function Server.trackedCount() return count end
