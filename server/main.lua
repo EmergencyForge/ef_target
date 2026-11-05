@@ -68,6 +68,9 @@ end
 RegisterNetEvent(TOGGLE_EVENT, function(netId, door) Server.toggleDoor(source, netId, door) end)
 RegisterNetEvent(TRACK_EVENT, function(netId) Server.trackEntity(source, netId) end)
 
+-- Its own thread: an ef_lib without this export must not stop the relay from loading
+CreateThread(function() exports.ef_lib:CheckVersion() end)
+
 CreateThread(function()
     while true do
         Wait(SWEEP_INTERVAL)
