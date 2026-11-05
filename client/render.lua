@@ -25,6 +25,8 @@ local DOT = 3.5
 local POINT_STROKE = 6
 local FRAMES = 6 -- steps from the four corners to the closed diamond
 local LINE, EDGE = 2, 1
+local FRAME_NAMES = {}
+for i = 0, FRAMES - 1 do FRAME_NAMES[i] = 'frame' .. i end
 
 local points = {}
 local aim = nil
@@ -109,7 +111,7 @@ local function loadTextures()
         paint(txd, 'fill', function(dx, dy) return math.max(math.abs(dx), math.abs(dy)) <= HALF and LINE or nil end)
         paint(txd, 'point', frameShape(POINT_STROKE, 0, false))
         for i = 0, FRAMES - 1 do
-            paint(txd, 'frame' .. i, frameShape(stroke, (HALF - CORNER) * (1 - i / (FRAMES - 1)), reticle.CenterDot))
+            paint(txd, FRAME_NAMES[i], frameShape(stroke, (HALF - CORNER) * (1 - i / (FRAMES - 1)), reticle.CenterDot))
         end
     end)
     if not ok then
@@ -136,7 +138,7 @@ local function drawAim(x, y, ar, ag, ab)
     if f < 0.0 then f = 0.0 elseif f > 1.0 then f = 1.0 end
     local heading, alpha = motion(aimTurn)
     if f > 0.01 then sprite('fill', x, y, width, heading, ar, ag, ab, math.floor(255 * f * alpha)) end
-    sprite('frame' .. math.floor(f * (FRAMES - 1) + 0.5), x, y, width, heading,
+    sprite(FRAME_NAMES[math.floor(f * (FRAMES - 1) + 0.5)], x, y, width, heading,
         math.floor(255 + (ar - 255) * f), math.floor(255 + (ag - 255) * f), math.floor(255 + (ab - 255) * f),
         math.floor(255 * alpha))
 end
@@ -179,7 +181,7 @@ function Render.drawFrame()
     local heading, alpha = motion(pointTurn)
     for _, point in ipairs(points) do
         -- The aimed point is drawn by the aim marker, two sprites would fight
-        if not (covered and (marked == point or (point.key and point.key == marked.key))) then
+        if not point.offScreen and not (covered and (marked == point or (point.key and point.key == marked.key))) then
             SetDrawOrigin(point.coords.x, point.coords.y, point.coords.z, 0)
             drawPoint(heading, alpha)
             ClearDrawOrigin()

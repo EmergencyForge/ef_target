@@ -2,7 +2,10 @@
 local Scan = {}
 EFT.Scan = Scan
 
-local SCAN_MS = 50
+local SCAN_MS = 80
+-- Rebuilding the points resolves every bone of every vehicle around, far too much for each scan.
+-- The aimed point stays exact on its own, only the others on a moving vehicle step at this rate.
+local COLLECT_MS = 150
 -- Walking a game pool is the costly part of a scan and entities enter range slowly
 local WALK_MS = 500
 local FLAGS_ALL, FLAGS_ENTITIES = 511, 26
@@ -17,6 +20,7 @@ local CENTRE_AIM = {}
 local generation = 0
 local current = nil
 local snappedKey = nil
+local collected, collectedFor, collectedMenu, nextCollect = {}, nil, nil, 0
 local known, walked, nextWalk, sightCursor = {}, {}, 0, 0
 
 local contains = { sphere = EFT.Geometry.inSphere, box = EFT.Geometry.inBox, poly = EFT.Geometry.inPoly }
@@ -147,26 +151,29 @@ local function updatePoints(entity, playerCoords, now)
         nextWalk = now + WALK_MS
         walked = Scan.pointEntities(EFT.Registry.pointPools(), nil, playerCoords)
     end
-    local entities = { entity }
-    for _, other in ipairs(walked) do
-        if other ~= entity then entities[#entities + 1] = other end
-    end
-
     local menu = EFT.Session.menu()
-    local fresh, points = {}, {}
-    for _, point in ipairs(Scan.collectPoints(entities, nil, playerCoords)) do
-        if reachable(point, menu) then
-            local old = known[point.key]
-            if old then point.visible, point.clear = old.visible, old.clear end
-            fresh[point.key] = point
-            points[#points + 1] = point
+    if now >= nextCollect or entity ~= collectedFor or menu ~= collectedMenu then
+        nextCollect, collectedFor, collectedMenu = now + COLLECT_MS, entity, menu
+        local entities = { entity }
+        for _, other in ipairs(walked) do
+            if other ~= entity then entities[#entities + 1] = other end
         end
-    end
-    known = fresh
 
-    local checked = EFT.Points.pick(points, Config.MaxPoints)
-    EFT.Points.refresh(checked, { playerCoords = playerCoords, menu = menu }, now)
-    return checked
+        local fresh, points = {}, {}
+        for _, point in ipairs(Scan.collectPoints(entities, nil, playerCoords)) do
+            if reachable(point, menu) then
+                local old = known[point.key]
+                if old then point.visible, point.clear = old.visible, old.clear end
+                fresh[point.key] = point
+                points[#points + 1] = point
+            end
+        end
+        known = fresh
+        collected = EFT.Points.pick(points, Config.MaxPoints)
+    end
+
+    EFT.Points.refresh(collected, { playerCoords = playerCoords, menu = menu }, now)
+    return collected
 end
 
 -- What gets drawn, which is also all that can be snapped to
@@ -190,7 +197,8 @@ local function drawList(checked, playerCoords)
         if not point.noSnap then
             local c = point.coords
             local onScreen, x, y = GetScreenCoordFromWorldCoord(c.x, c.y, c.z)
-            if onScreen then point.sx, point.sy = x, y end
+            point.offScreen = not onScreen
+            if onScreen then point.sx, point.sy = x, y else point.sx, point.sy = nil, nil end
         end
     end
     return list
@@ -266,6 +274,7 @@ local function step(mine)
     local drawn = drawList(checked, playerCoords)
     local point = EFT.Points.snap(drawn, Config.SnapRadius, GetAspectRatio(false), snappedKey)
     snappedKey = point and point.key
+    if point and point.entity then point.coords = EFT.Points.resolve(point.entries[1], point.entity) or point.coords end
 
     current = buildTarget(entity, coords, playerCoords, zonesAt(coords), point)
     Session.update(current)
@@ -280,6 +289,7 @@ function Scan.start()
     local mine = generation
     -- known stays: the check results of the last press save the next one from starting at zero
     walked, nextWalk, current, snappedKey = {}, 0, nil, nil
+    collected, collectedFor, collectedMenu, nextCollect = {}, nil, nil, 0
     CreateThread(function()
         while mine == generation and EFT.Session.isActive() do
             local started = GetGameTimer()

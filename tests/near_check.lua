@@ -671,6 +671,16 @@ check('releasing cancels', not Session.isActive())
 pump(2)
 check('nothing is left running', #threads == 0 and not Render.isRunning())
 
+-- The points are rebuilt less often than the scan runs
+local collects, realCollect, aimsThen = 0, S.collectPoints, aimCalls
+S.collectPoints = function(...) collects = collects + 1; return realCollect(...) end
+press()
+scans(12)
+release()
+pump(2)
+S.collectPoints = realCollect
+check('a scan does not rebuild the points each time', collects > 0 and collects < aimCalls - aimsThen)
+
 -- A ray can come back after the cleanup already ran
 press()
 pump(1)

@@ -16,8 +16,11 @@ local current = FALLBACK
 local ok, hex = pcall(function() return exports.ef_lib:GetAccentColor() end)
 if ok and Accent.parse(hex) then current = hex end
 
+-- Read every frame while a marker is drawn
+local r, g, b = Accent.parse(current)
+
 function Accent.rgb()
-    return Accent.parse(current)
+    return r, g, b
 end
 
 -- The panel and key pill are NUI and need the same colour the markers use
@@ -28,5 +31,6 @@ end
 AddEventHandler('ef_lib:accentChanged', function(hex)
     if not Accent.parse(hex) then return end
     current = hex
+    r, g, b = Accent.parse(hex)
     Accent.push()
 end)
