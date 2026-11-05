@@ -124,8 +124,10 @@ html, body {
 }
 .tp-row .tp-chev { width: 10px; font-size: 9px; opacity: 0.55; }
 .tp-row em, .pill em { font-size: 10.5px; font-style: normal; opacity: 0.72; }
-.tp-row .kbd {
+/* border-box: the kit's 20px minimum plus its padding made a single letter 30px wide */
+.tp-row .kbd, .pill .kbd {
   flex: none;
+  box-sizing: border-box;
   background: var(--accent-color);
   color: var(--on-accent);
 }
@@ -166,7 +168,3 @@ html, body {
 .pill.show { display: inline-flex; }
 .pill > * { position: relative; }
 .pill .fill { position: absolute; }
-.pill .kbd {
-  background: var(--accent-color);
-  color: var(--on-accent);
-}

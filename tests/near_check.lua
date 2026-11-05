@@ -191,6 +191,8 @@ local R, N, S, Session, Render = EFT.Registry, EFT.Near, EFT.Scan, EFT.Session, 
 
 local aimed, aimHit, aimCalls, drawn, emptySends = nil, nil, 0, nil, 0
 local realAim, realPoints = Render.setAim, Render.setPoints
+-- The motion has its own checks in render_check, here a marker just has to be gone after a frame
+EFT.Spring.step = function(s, target) s.value, s.velocity = target, 0.0; return target end
 Render.setAim = function(point, hit)
     aimed, aimHit, aimCalls = point, hit, aimCalls + 1
     return realAim(point, hit)
@@ -308,7 +310,7 @@ local function pillKeyFor(label)
     local key = last('pill').key
     R.remove(id)
     N.sync()
-    pump(1)
+    pump(2)
     threads = {}
     return key
 end
@@ -500,7 +502,7 @@ release()
 pump(2)
 R.remove(nearSpot)
 N.sync()
-pump(1)
+pump(2)
 threads = {}
 
 -- Unchecked points go first in both round robins

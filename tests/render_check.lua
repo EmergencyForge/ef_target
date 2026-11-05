@@ -27,7 +27,9 @@ local origins, cleared, sprites = 0, 0, {}
 local drawn = {}
 natives.SetDrawOrigin = function(x) origins = origins + 1; drawn[#drawn + 1] = x end
 natives.ClearDrawOrigin = function() cleared = cleared + 1 end
-natives.DrawSprite = function(_, name, x, y, w, h, heading) sprites[#sprites + 1] = { name = name, x = x, y = y, w = w, h = h, heading = heading } end
+natives.DrawSprite = function(_, name, x, y, w, h, heading, _, _, _, a)
+    sprites[#sprites + 1] = { name = name, x = x, y = y, w = w, h = h, heading = heading, alpha = a }
+end
 
 harness.load('client/eft.lua')
 harness.load('client/nui.lua')
@@ -70,10 +72,12 @@ check('the nearest points win the limit', #drawn == Config.MaxPoints and lowest 
 check('every origin is cleared with an aim', cleared == origins)
 
 sprites = {}
-Render.setPoints({ thirty[1] }); Render.setAim({ key = 'x', coords = vec3(0, 0, 0) }, true); Render.drawFrame()
+local function frames(n) for _ = 1, n do Render.drawFrame() end end
+Render.setPoints({ thirty[1] }); Render.setAim({ key = 'x', coords = vec3(0, 0, 0) }, true); frames(60)
+sprites = {}; Render.drawFrame()
 local first = sprites[1]
-check('a point uses the square frame', first.name == 'point' and first.heading == 0.0)
-check('the own marker is turned into a diamond', sprites[#sprites].name:sub(1, 5) == 'frame' and sprites[#sprites].heading == 45.0)
+check('a point is a diamond', first.name == 'point' and math.abs(first.heading - 45.0) < 0.1)
+check('the own marker is a diamond', sprites[#sprites].name:sub(1, 5) == 'frame' and math.abs(sprites[#sprites].heading - 45.0) < 0.1)
 check('sprite height follows the aspect ratio', math.abs(first.h / first.w - 16 / 9) < 1e-6)
 
 local function alpha(name, x, y) return textures[name].alpha[(y + 32) * 64 + x + 32] end
@@ -85,13 +89,15 @@ check('the last frame is closed', alpha('frame5', 0, -22) > 200)
 check('the closing steps shrink the gap', alpha('frame3', 7, -22) > 200 and alpha('frame0', 7, -22) == 0)
 check('the outline stays black', shade('frame5', 0, -28) == 0 and alpha('frame5', 0, -28) > 0)
 check('the centre dot is painted', alpha('frame0', 0, 0) == 255)
-check('a point has no dot and keeps its gap', alpha('point', 0, 0) == 0 and alpha('point', 0, -22) == 0)
+check('a point has no dot and no gap', alpha('point', 0, 0) == 0 and alpha('point', 0, -22) > 200)
 
 sprites = {}
 Render.setPoints({}); Render.setAim({}, false); Render.drawFrame()
 check('an aim without coords draws at the screen centre', sprites[1] and sprites[1].x == 0.5 and sprites[1].y == 0.5)
 
 Render.setPoints({}); Render.setAim(nil, false)
+check('the marker turns away before the thread stops', Render.needsFrame())
+frames(60)
 check('nothing visible stops the thread', not Render.needsFrame())
 Render.stop()
 check('stop ends the renderer', not Render.isRunning())
@@ -133,6 +139,36 @@ Render.start(); Render.stop(); Render.setPoints({ thirty[1] }); Render.start()
 check('points set while stopped are ignored', not Render.needsFrame())
 Render.stop()
 
+local function headings()
+    sprites = {}
+    Render.drawFrame()
+    return sprites[1], sprites[#sprites]
+end
+Render = fresh()
+Render.start(); Render.setPoints({ thirty[1] }); Render.setAim({}, false)
+local point, marker = headings()
+check('a marker starts as a square', marker.heading < 10.0 and point.heading < 10.0)
+frames(60)
+Render.setAim(nil, false); Render.stop()
+point, marker = headings()
+check('a release leaves the markers on screen', marker.alpha == 255 and point.alpha == 255)
+check('a release turns them back', marker.heading < 45.0 and point.heading < 45.0 and Render.needsFrame())
+frames(3)
+local turning = select(2, headings()).heading
+Render.start(); Render.setAim({}, false)
+check('a new press carries on from the turn', select(2, headings()).heading > turning - 8.0)
+frames(60)
+Render.setAim(nil, false); Render.stop()
+frames(60)
+check('turned away means gone', not Render.needsFrame())
+
+Render = fresh()
+Render.start(); Render.setPoints({ thirty[1] }); frames(60)
+Render.setAim({}, false)
+point, marker = headings()
+check('near points stay while the own marker turns in', math.abs(point.heading - 45.0) < 0.1 and marker.heading < 10.0)
+Render.setAim(nil, false); Render.stop()
+
 -- The thread runs inline here, a Wait hook ends it after the springs settled on a hit
 local waits = 0
 natives.CreateThread = function(fn) fn() end
@@ -142,7 +178,7 @@ natives.Wait = function()
 end
 Render = fresh()
 Render.start(); Render.setAim({}, true)
-check('the thread ends once nothing is visible', waits == 60 and not Render.needsFrame())
+check('the thread ends once nothing is visible', waits > 60 and not Render.needsFrame())
 sprites = {}
 natives.CreateThread = function() end
 Render.setAim({}, false); Render.drawFrame()

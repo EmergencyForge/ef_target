@@ -4,7 +4,7 @@ Config = {
     Toggle = false,          -- true: press once to open, again to close
     Reticle = {
         Thickness = 2.0,     -- line width of the own marker in pixels at 1080p, 1.0 to 3.5
-        CenterDot = true,    -- dot in the middle of the own marker
+        CenterDot = false,   -- dot in the middle of the own marker
     },
     SnapRadius = 0.035,      -- share of screen height within which the cursor snaps to a point
     MaxPoints = 24,          -- points shown at once

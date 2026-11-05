@@ -18,7 +18,7 @@ Das Manifest enthält `provide 'ox_target'`, `provide 'qb-target'` und `provide 
 
 ## Bedienung
 
-Alt halten (`LMENU`, in den FiveM-Tastenbelegungen änderbar). In der Bildmitte erscheint eine Raute aus vier Ecken, Punkte in Reichweite erscheinen als eckige Rahmen. Trifft der Strahl eine Entity oder Zone, oder liegt ein Punkt nahe der Bildmitte, schließt und füllt sich die Raute in der Akzentfarbe aus ef_lib, und das Panel zeigt die Optionen.
+Alt halten (`LMENU`, in den FiveM-Tastenbelegungen änderbar). In der Bildmitte dreht sich eine Raute aus vier Ecken ein, beim Loslassen dreht sie sich wieder heraus, Punkte in Reichweite erscheinen als kleine Rauten. Trifft der Strahl eine Entity oder Zone, oder liegt ein Punkt nahe der Bildmitte, schließt und füllt sich die Raute in der Akzentfarbe aus ef_lib, und das Panel zeigt die Optionen.
 
 - Mausrad wählt die Option, Linksklick oder E löst aus. Bei nur einer Option reicht der Klick.
 - Optionen mit `hold` zeigen "halten": Taste gedrückt lassen, die Zeile füllt sich. Loslassen oder eine andere Zeile wählen bricht ab.
@@ -28,7 +28,7 @@ Alt halten (`LMENU`, in den FiveM-Tastenbelegungen änderbar). In der Bildmitte 
 - Solange Alt aktiv ist, sind Schießen, Zielen und Nahkampf gesperrt, das Mausrad schaltet keine Waffe um.
 - Alt endet von selbst bei Pausenmenü, Tod, NUI-Fokus (etwa ein offenes Menü einer anderen Resource), laufendem Fortschrittsbalken von ef_lib oder ox_lib und `DisableTargeting(true)`.
 
-Rastet die Raute auf einem Punkt ein, stehen dessen Optionen oben und sind vorausgewählt. Nach einer Trennlinie folgen die allgemeinen Optionen der Entity. Ein Punkt wird nur gezeichnet, wenn mindestens eine seiner Optionen für den Spieler erlaubt ist. Zonen bekommen einen kleinen Rahmen am Mittelpunkt, die nicht einrastet. `drawSprite = false` schaltet sie ab.
+Rastet die Raute auf einem Punkt ein, stehen dessen Optionen oben und sind vorausgewählt. Nach einer Trennlinie folgen die allgemeinen Optionen der Entity. Ein Punkt wird nur gezeichnet, wenn mindestens eine seiner Optionen für den Spieler erlaubt ist. Zonen bekommen eine kleine Raute am Mittelpunkt, die nicht einrastet. `drawSprite = false` schaltet sie ab.
 
 Eingebaut sind Punkte an den vier Türgriffen (ohne Griff-Bone an der Tür), der Motorhaube und dem Kofferraum aller Fahrzeuge. `Config.DefaultPoints = false` schaltet sie ab.
 
@@ -41,7 +41,7 @@ Config = {
     Toggle = false,          -- true: einmal drücken öffnet, nochmal schließt
     Reticle = {
         Thickness = 2.0,     -- Strichstärke der eigenen Raute in Pixeln bei 1080p, 1.0 bis 3.5
-        CenterDot = true,    -- Punkt in der Mitte der eigenen Raute
+        CenterDot = false,   -- Punkt in der Mitte der eigenen Raute
     },
     SnapRadius = 0.035,      -- Anteil der Bildhöhe, in dem die Raute auf einen Punkt springt
     MaxPoints = 24,          -- so viele Punkte werden gleichzeitig gezeichnet, die nächsten gewinnen

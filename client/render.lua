@@ -7,8 +7,10 @@ local TXD = 'ef_target'
 local AIM_WIDTH = 0.010
 local POINT_SCALE = 0.7
 local HIT_SCALE = 0.85
--- The own marker is the square texture turned into a diamond, points stay square
-local AIM_HEADING = 45.0
+-- The square textures turn into diamonds when shown and back when hidden
+local HEADING = 45.0
+local FADE_END = 0.35 -- share of the turn after which a marker is fully visible
+local GONE = 0.02
 
 -- Painted at runtime and not shipped as files, so the line width can come from the config
 local SIZE = 64
@@ -19,12 +21,13 @@ local CORNER = 11 -- leg of a corner
 local OUTLINE = 3
 local OUTLINE_ALPHA = 0.6
 local DOT = 3.5
-local POINT_STROKE = 8
+local POINT_STROKE = 6
 local FRAMES = 6 -- steps from the four corners to the closed diamond
 local LINE, EDGE = 2, 1
 
 local points = {}
 local aim = nil
+local lastAim = nil -- aim is gone on release, the marker still has to turn away there
 local aimHit = false
 local active = false
 local threadAlive = false
@@ -34,10 +37,21 @@ local aspect = 16 / 9
 
 local fill = { value = 0.0, velocity = 0.0 }
 local scale = { value = 1.0, velocity = 0.0 }
+-- Two springs: with near points on screen the own marker still has to turn in on its own
+local aimTurn = { value = 0.0, velocity = 0.0 }
+local pointTurn = { value = 0.0, velocity = 0.0 }
 
 local function resetSprings()
     fill.value, fill.velocity = 0.0, 0.0
     scale.value, scale.velocity = 1.0, 0.0
+    aimTurn.value, aimTurn.velocity = 0.0, 0.0
+    pointTurn.value, pointTurn.velocity = 0.0, 0.0
+end
+
+local function motion(turn)
+    local alpha = turn.value / FADE_END
+    if alpha < 0.0 then alpha = 0.0 elseif alpha > 1.0 then alpha = 1.0 end
+    return HEADING * turn.value, alpha
 end
 
 -- shape(dx, dy) says what lies at that offset from the centre.
@@ -85,7 +99,7 @@ local function loadTextures()
         local stroke = math.max(1.0, math.min(reticle.Thickness, 3.5)) * TEXELS_PER_PIXEL
         local txd = CreateRuntimeTxd(TXD)
         paint(txd, 'fill', function(dx, dy) return math.max(math.abs(dx), math.abs(dy)) <= HALF and LINE or nil end)
-        paint(txd, 'point', frameShape(POINT_STROKE, HALF - CORNER, false))
+        paint(txd, 'point', frameShape(POINT_STROKE, 0, false))
         for i = 0, FRAMES - 1 do
             paint(txd, 'frame' .. i, frameShape(stroke, (HALF - CORNER) * (1 - i / (FRAMES - 1)), reticle.CenterDot))
         end
@@ -103,8 +117,8 @@ local function sprite(name, x, y, width, heading, r, g, b, a)
     DrawSprite(TXD, name, x, y, width, width * aspect, heading, r, g, b, a)
 end
 
-local function drawPoint()
-    sprite('point', 0.0, 0.0, AIM_WIDTH * POINT_SCALE, 0.0, 255, 255, 255, 255)
+local function drawPoint(heading, alpha)
+    sprite('point', 0.0, 0.0, AIM_WIDTH * POINT_SCALE, heading, 255, 255, 255, math.floor(255 * alpha))
 end
 
 -- Fill runs from 0 to 1 with the hit: the corners grow into closed sides and the inside takes the accent
@@ -112,13 +126,15 @@ local function drawAim(x, y, ar, ag, ab)
     local width = AIM_WIDTH * scale.value
     local f = fill.value
     if f < 0.0 then f = 0.0 elseif f > 1.0 then f = 1.0 end
-    if f > 0.01 then sprite('fill', x, y, width, AIM_HEADING, ar, ag, ab, math.floor(255 * f)) end
-    sprite('frame' .. math.floor(f * (FRAMES - 1) + 0.5), x, y, width, AIM_HEADING,
-        math.floor(255 + (ar - 255) * f), math.floor(255 + (ag - 255) * f), math.floor(255 + (ab - 255) * f), 255)
+    local heading, alpha = motion(aimTurn)
+    if f > 0.01 then sprite('fill', x, y, width, heading, ar, ag, ab, math.floor(255 * f * alpha)) end
+    sprite('frame' .. math.floor(f * (FRAMES - 1) + 0.5), x, y, width, heading,
+        math.floor(255 + (ar - 255) * f), math.floor(255 + (ag - 255) * f), math.floor(255 + (ab - 255) * f),
+        math.floor(255 * alpha))
 end
 
 function Render.needsFrame()
-    return active and (#points > 0 or aim ~= nil)
+    return (active and (#points > 0 or aim ~= nil)) or aimTurn.value > GONE or pointTurn.value > GONE
 end
 
 function Render.drawFrame()
@@ -126,20 +142,24 @@ function Render.drawFrame()
     local Sp = EFT.Spring
     Sp.step(fill, aimHit and 1.0 or 0.0, dt)
     Sp.step(scale, aimHit and HIT_SCALE or 1.0, dt)
+    Sp.step(aimTurn, aim and 1.0 or 0.0, dt)
+    Sp.step(pointTurn, active and #points > 0 and 1.0 or 0.0, dt)
 
+    local marked = (aim or aimTurn.value > GONE) and lastAim or nil
+    local heading, alpha = motion(pointTurn)
     for _, point in ipairs(points) do
         -- The aimed point is drawn by the aim marker, two sprites would fight
-        if not (aim and (aim == point or (point.key and point.key == aim.key))) then
+        if not (marked and (marked == point or (point.key and point.key == marked.key))) then
             SetDrawOrigin(point.coords.x, point.coords.y, point.coords.z, 0)
-            drawPoint()
+            drawPoint(heading, alpha)
             ClearDrawOrigin()
         end
     end
 
-    if aim then
+    if marked then
         local r, g, b = EFT.Accent.rgb()
-        if aim.coords then
-            SetDrawOrigin(aim.coords.x, aim.coords.y, aim.coords.z, 0)
+        if marked.coords then
+            SetDrawOrigin(marked.coords.x, marked.coords.y, marked.coords.z, 0)
             drawAim(0.0, 0.0, r, g, b)
             ClearDrawOrigin()
         else
@@ -151,7 +171,7 @@ end
 local function wake()
     if threadAlive or not Render.needsFrame() then return end
     threadAlive = true
-    -- The last session may have ended on a hit, the next aim must not ease back from it
+    -- Only reached without a thread, so a press during the turn back keeps the springs where they are
     resetSprings()
     CreateThread(function()
         while Render.needsFrame() do
@@ -159,6 +179,7 @@ local function wake()
             Wait(0)
         end
         threadAlive = false
+        if not active then points = {} end
     end)
 end
 
@@ -176,6 +197,7 @@ end
 -- A point without coords aims at the screen centre
 function Render.setAim(point, hit)
     aim = point
+    lastAim = point or lastAim
     aimHit = hit and true or false
     wake()
 end
@@ -184,15 +206,15 @@ function Render.start()
     if not loadTextures() then return end
     -- The window can change size between sessions
     aspect = GetAspectRatio(false)
-    resetSprings()
     EFT.Accent.push()
     active = true
     wake()
 end
 
+-- The points stay in the list for the turn back, the render thread drops them when it ends
 function Render.stop()
     active = false
-    points, aim, aimHit = {}, nil, false
+    aim, aimHit = nil, false
 end
 
 function Render.isRunning()
