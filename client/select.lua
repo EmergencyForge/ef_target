@@ -9,8 +9,21 @@ function Select.response(option, target, server, row)
     local response = {}
     for k, v in pairs(option) do response[k] = v end
     for _, key in ipairs(dropped) do response[key] = nil end
-    response.entity = server and (target.netId or 0) or target.entity
     local point = row and row.point
+    local entity = target.entity
+    if point then entity = point.entity end
+    if not server then
+        response.entity = entity
+    elseif not point or point.entity == target.entity then
+        response.entity = target.netId or 0
+    elseif not entity then
+        response.entity = 0
+    elseif NetworkGetEntityIsNetworked(entity) then
+        -- target.netId belongs to the aimed entity, a point may sit on another one
+        response.entity = NetworkGetNetworkIdFromEntity(entity)
+    else
+        response.entity = 0
+    end
     response.coords = point and point.coords or target.coords
     response.distance = point and point.distance or target.distance
     response.zone = row and row.zone or nil
@@ -21,7 +34,7 @@ end
 local function call(row, option, target)
     local response = Select.response(option, target, false, row)
     if option.onSelect then
-        option.onSelect(option.qtarget and target.entity or response)
+        option.onSelect(option.qtarget and response.entity or response)
     elseif option.export then
         exports[option.resource or row.entry.resource][option.export](nil, response)
     elseif option.event then

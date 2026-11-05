@@ -122,13 +122,28 @@ local hidden = { point = { key = 'h', coords = vec3(1, 1, 1), distance = 1.0, en
     entries = { entry({ { label = 'Hidden', canInteract = function() return false end } }, { id = 8, anchor = { bone = 'b' } }) } },
     entries = { general }, zones = {}, entity = 5, entityType = 2, coords = vec3(0, 0, 0), distance = 2.0 }
 check('no divider when every point option is filtered out', not M.build(hidden, state)[1].divider)
-check('a back row alone does not earn a divider', not M.build(hidden, { menu = 'sub', history = {} })[2])
+check('a back row alone does not earn a divider', M.build(hidden, { menu = 'sub', history = {} })[1].divider == false)
 
 local failState = { menu = 'a', history = { 'home' } }
 _G.print = function() end
 local failed = S.run({ option = { openMenu = 'b', onSelect = function() error('x') end } }, target, failState)
 _G.print = realPrint
 check('a throwing target after openMenu restores the menu', failed == 'closed' and failState.menu == 'a' and #failState.history == 1)
+
+-- The entity a point row acts on is the point's, not the target's
+_G.NetworkGetEntityIsNetworked = function(e) return e == 6 end
+_G.NetworkGetNetworkIdFromEntity = function(e) return e * 100 end
+local ptNet = { point = ptPoint, netId = 55, entity = 5, coords = vec3(0, 0, 0), distance = 4.0 }
+local ptRow = { point = ptPoint, option = {} }
+check('a point response carries the point entity', seen.entity == 6)
+check('a point server response resolves the point net id', S.response({}, ptNet, true, ptRow).entity == 600)
+check('a point on the target entity keeps target.netId', S.response({}, ptNet, true, { point = { entity = 5 } }).entity == 55)
+check('an unnetworked point entity gives 0', S.response({}, ptNet, true, { point = { entity = 7 } }).entity == 0)
+local coordsRow = { point = { key = 'c', coords = vec3(1, 1, 1) }, option = {} }
+check('a coords point gives nil client and 0 server', S.response({}, ptNet, false, coordsRow).entity == nil and S.response({}, ptNet, true, coordsRow).entity == 0)
+S.run({ point = ptPoint, option = { qtarget = true, onSelect = function(a) seen = a end } }, ptTarget, state)
+check('qtarget on a point row gets the point entity', seen == 6)
+_G.NetworkGetEntityIsNetworked, _G.NetworkGetNetworkIdFromEntity = nil, nil
 
 -- Leave no stubs behind for the checks that run after this file
 for _, name in ipairs({ 'Config', 'L', 'GetGameTimer', 'DoesEntityExist', 'exports', 'TriggerEvent', 'TriggerServerEvent', 'ExecuteCommand' }) do
