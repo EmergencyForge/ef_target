@@ -101,4 +101,27 @@ local z2 = R.addZone({ coords = vec3(0, 0, 0), size = vec3(2, 2, 2), options = {
 onStop('res_z')
 check('onResourceStop drops zones too', not R.zoneExists(z2))
 
+local tracked = {}
+-- Only labels from the entity and local buckets, global leftovers from earlier checks do not count
+local function labelsFor(entity, netId)
+    local out = {}
+    for _, entry in ipairs(R.forEntity(entity, 0, 0, netId, false)) do
+        for _, option in ipairs(entry.options) do out[#out + 1] = option.label end
+    end
+    return ',' .. table.concat(out, ',') .. ','
+end
+local function has(entity, netId, label) return labelsFor(entity, netId):find(',' .. label .. ',', 1, true) ~= nil end
+harness.natives.NetworkGetEntityIsNetworked = function(entity) return entity >= 100 end
+harness.natives.NetworkGetNetworkIdFromEntity = function(entity) return entity - 90 end
+harness.natives.TriggerServerEvent = function(event, netId) tracked[#tracked + 1] = { event, netId } end
+R.addEntity(100, { label = 'N' }, 'res_n')
+R.addEntity(7, { label = 'L' }, 'res_n')
+check('a networked entity is keyed by net id and reported', has(100, 10, 'N')
+    and #tracked == 1 and tracked[1][1] == 'ef_target:trackEntity' and tracked[1][2] == 10)
+check('a local entity is keyed by handle and not reported', has(7, nil, 'L') and #tracked == 1)
+R.removeEntities({ 10, 11 })
+check('removeEntities drops the net id entries only', not has(100, 10, 'N')
+    and has(7, nil, 'L'))
+for _, name in ipairs({ 'NetworkGetEntityIsNetworked', 'NetworkGetNetworkIdFromEntity', 'TriggerServerEvent' }) do _G[name] = nil end
+
 harness.resetEFT()

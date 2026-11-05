@@ -47,6 +47,10 @@ client_scripts {
     'client/exports.lua'
 }
 
+server_scripts {
+    'server/main.lua'
+}
+
 files {
     'web/dist/**/*',
     'assets/*.png'

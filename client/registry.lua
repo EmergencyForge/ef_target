@@ -136,6 +136,23 @@ function Registry.add(kind, key, options, resource, extra)
     return id
 end
 
+-- Networked entities are keyed by net id so every client resolves them alike, the rest by local handle.
+-- The server is told about networked ones so it can announce their deletion.
+function Registry.addEntity(entity, options, resource, extra)
+    if NetworkGetEntityIsNetworked(entity) then
+        local netId = NetworkGetNetworkIdFromEntity(entity)
+        TriggerServerEvent('ef_target:trackEntity', netId)
+        return Registry.add('entity', netId, options, resource, extra)
+    end
+    return Registry.add('local', entity, options, resource, extra)
+end
+
+function Registry.removeEntities(netIds)
+    for _, netId in ipairs(netIds) do
+        purge(function() return false end, 'entity', netId)
+    end
+end
+
 local function append(out, list)
     if list then for _, entry in ipairs(list) do out[#out + 1] = entry end end
 end
@@ -251,4 +268,9 @@ end
 -- Outside FiveM there is no event system, the guard keeps the file loadable in tests
 if AddEventHandler then
     AddEventHandler('onResourceStop', function(resource) Registry.removeResource(resource) end)
+end
+if RegisterNetEvent then
+    RegisterNetEvent('ef_target:removeEntities', function(netIds)
+        if type(netIds) == 'table' then Registry.removeEntities(netIds) end
+    end)
 end
