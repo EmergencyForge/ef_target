@@ -1,0 +1,8 @@
+.claude/
+.superpowers/
+web/node_modules/
+web/tsconfig.tsbuildinfo
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
