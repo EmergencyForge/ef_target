@@ -8,7 +8,12 @@ local function stub(name, value)
 end
 
 local boneAt = vec3(1, 2, 3)
-stub('GetEntityBoneIndexByName', function(_, name) return (name == 'missing' or name == 'handle') and -1 or 1 end)
+local boneAsks, entityExists = 0, true
+stub('GetEntityBoneIndexByName', function(_, name)
+    boneAsks = boneAsks + 1
+    return (name == 'missing' or name == 'handle') and -1 or 1
+end)
+stub('DoesEntityExist', function() return entityExists end)
 stub('GetEntityBonePosition_2', function() return boneAt end)
 stub('GetEntityModel', function() return 77 end)
 stub('GetModelDimensions', function() return vec3(-1, -2, 0), vec3(1, 2, 2) end)
@@ -38,6 +43,21 @@ check('a relative offset scales by the model size',
 check('an absolute offset is passed as is',
     P.resolve({ anchor = { offset = vec3(1, 2, 3), relative = false } }, 5) == vec3(101, 2, 3))
 check('coords anchors need no entity', P.resolve({ anchor = { coords = vec3(4, 5, 6) } }, nil) == vec3(4, 5, 6))
+
+local shared = { anchor = { bone = 'handle', fallback = 'door' } }
+boneAsks = 0
+P.resolve(shared, 5); P.resolve(shared, 6)
+check('a model looks its bones up once', boneAsks == 2)
+P.resolve(shared, 7, 78)
+check('another model looks them up again', boneAsks == 4)
+local gone = { anchor = { bone = 'handle' } }
+entityExists = false
+P.resolve(gone, 5)
+entityExists = true
+boneAsks = 0
+P.resolve(gone, 6)
+P.resolve(gone, 6)
+check('a deleted entity does not mark the bone as missing', boneAsks == 1)
 
 local pts = P.collect(5, { entry('door'), entry('door'), entry('wheel'), { options = { { label = 'general' } } } }, vec3(0, 0, 0))
 check('two scripts on one bone share a point', #pts == 2 and #pts[1].entries == 2 and pts[1].key == '5:b:door')

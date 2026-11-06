@@ -13,6 +13,10 @@ local trail = {}
 local nav, restore
 -- Bumped when a session ends, so a click that outlives its session can tell
 local sessionId = 0
+-- The progress bars live in other resources, and an export call is far dearer than a native.
+-- At 100 ms per scan this asks on every second scan.
+local PROGRESS_MS = 150
+local inProgress, nextProgress = false, 0
 
 local function hide()
     if shown then EFT.Nui.hide() end
@@ -51,8 +55,7 @@ function Session.holdTime()
     return row and row.hold
 end
 
-function Session.blocked()
-    if disabled or IsPauseMenuActive() or IsNuiFocused() or IsPedDeadOrDying(PlayerPedId(), true) then return true end
+local function progressActive()
     -- The lib may be stopped or older than this call, so a failing lookup counts as "not busy"
     if exports then
         local ok, busy = pcall(function() return exports.ef_lib:IsProgressBarActive() end)
@@ -66,8 +69,19 @@ function Session.blocked()
     return false
 end
 
+-- fresh is for a key press, which must not act on an answer from before the bar started
+function Session.blocked(fresh)
+    if disabled or IsPauseMenuActive() or IsNuiFocused() or IsPedDeadOrDying(PlayerPedId(), true) then return true end
+    local now = GetGameTimer()
+    if fresh or now >= nextProgress then
+        nextProgress = now + PROGRESS_MS
+        inProgress = progressActive()
+    end
+    return inProgress
+end
+
 function Session.begin()
-    if active or Session.blocked() then return false end
+    if active or Session.blocked(true) then return false end
     active = true
     hide()
     return true

@@ -8,20 +8,48 @@ local MERGE_DISTANCE = 0.4
 -- Round robin position for refresh, one point per call keeps the cross-resource filter calls spread out
 local cursor = 0
 
--- Returns the world position of an entry's anchor, nil when the bone does not exist
-function Points.resolve(entry, entity)
+-- Skeleton and size belong to the model, so the lookups by name only have to happen once
+local boneIndexes, modelSizes = {}, {}
+
+local function boneIndex(anchor, entity, model)
+    local indexes = boneIndexes[model]
+    if not indexes then
+        indexes = {}
+        boneIndexes[model] = indexes
+    end
+    local index = indexes[anchor]
+    if index then return index end
+    index = GetEntityBoneIndexByName(entity, anchor.bone)
+    if index == -1 and anchor.fallback then index = GetEntityBoneIndexByName(entity, anchor.fallback) end
+    -- A deleted entity also answers -1, which says nothing about its model
+    if index ~= -1 or DoesEntityExist(entity) then indexes[anchor] = index end
+    return index
+end
+
+local function modelSize(model)
+    local size = modelSizes[model]
+    if not size then
+        local min, max = GetModelDimensions(model)
+        size = { min = min, extent = max - min }
+        modelSizes[model] = size
+    end
+    return size
+end
+
+-- Returns the world position of an entry's anchor, nil when the bone does not exist.
+-- model saves a native where the caller already knows it.
+function Points.resolve(entry, entity, model)
     local anchor = entry.anchor
     if anchor.coords then return anchor.coords end
     if anchor.bone then
-        local index = GetEntityBoneIndexByName(entity, anchor.bone)
-        if index == -1 and anchor.fallback then index = GetEntityBoneIndexByName(entity, anchor.fallback) end
+        local index = boneIndex(anchor, entity, model or GetEntityModel(entity))
         if index == -1 then return nil end
         return GetEntityBonePosition_2(entity, index)
     end
     local offset = anchor.offset
     if anchor.relative then
-        local min, max = GetModelDimensions(GetEntityModel(entity))
-        offset = (max - min) * offset + min
+        local size = modelSize(model or GetEntityModel(entity))
+        offset = size.extent * offset + size.min
     end
     return GetOffsetFromEntityInWorldCoords(entity, offset.x, offset.y, offset.z)
 end
@@ -45,11 +73,11 @@ local function mergesInto(points, entry, coords)
     return false
 end
 
-function Points.collect(entity, entries, playerCoords)
+function Points.collect(entity, entries, playerCoords, model)
     local points, byKey = {}, {}
     for _, entry in ipairs(entries) do
         if entry.anchor then
-            local coords = Points.resolve(entry, entity)
+            local coords = Points.resolve(entry, entity, model)
             if coords then
                 local key = keyOf(entry.anchor, entity)
                 local point = byKey[key]
@@ -58,7 +86,7 @@ function Points.collect(entity, entries, playerCoords)
                 elseif not mergesInto(points, entry, coords) then
                     point = {
                         key = key, coords = coords, label = entry.label, entries = { entry },
-                        show = entry.show, entity = entity,
+                        show = entry.show, entity = entity, model = model,
                         distance = #(coords - playerCoords),
                     }
                     byKey[key] = point

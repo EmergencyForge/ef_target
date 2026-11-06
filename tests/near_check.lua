@@ -82,7 +82,7 @@ local justPressed, heldDown, disabled, fired, typeCalls = {}, {}, {}, 0, {}
 local instructional, buttonArgs = 't_E', nil
 local inVehicle, paused, doorValid, lockStatus, doorDamaged, doorAngle = 0, false, true, 1, false, 0.0
 local doorCalls, owner, networked = {}, 1, true
-local onScreen = true
+local onScreen, screenShift = true, 0
 
 stub({
     AddEventHandler = function() end,
@@ -126,7 +126,7 @@ stub({
     GetOffsetFromEntityInWorldCoords = function(entity, x, y, z) return world[entity].coords + vec3(x, y, z) end,
 
     GetWorldCoordFromScreenCoord = function() return camera, vec3(0, 1, 0) end,
-    GetScreenCoordFromWorldCoord = function(x) return onScreen, 0.5 + x / 10, 0.5 end,
+    GetScreenCoordFromWorldCoord = function(x) return onScreen, 0.5 + x / 10 + screenShift, 0.5 end,
     GetAspectRatio = function() return 16 / 9 end,
     StartShapeTestLosProbe = function(fx, fy, fz, tx, ty, tz, flags)
         local length = #(vec3(tx, ty, tz) - vec3(fx, fy, fz))
@@ -280,7 +280,11 @@ check('the pill shows the option text', last('pill') and last('pill').label == '
 check('the pill follows the point in screen fractions', last('pillPos') and last('pillPos').x == 0.51 and last('pillPos').y == 0.5)
 local position, pills = count('pillPos'), count('pill')
 pump(1)
-check('the position goes out every frame, the pill once', count('pillPos') == position + 1 and count('pill') == pills)
+check('a resting pill sends nothing', count('pillPos') == position and count('pill') == pills)
+screenShift = 0.001
+pump(1)
+check('a moved pill sends its position, the text stays', count('pillPos') == position + 1 and count('pill') == pills)
+screenShift = 0
 onScreen = false
 pump(1)
 check('an off screen point hides the pill', count('pillHide') == 1)
@@ -680,6 +684,25 @@ release()
 pump(2)
 S.collectPoints = realCollect
 check('a scan does not rebuild the points each time', collects > 0 and collects < aimCalls - aimsThen)
+
+local function walksVehicle(from)
+    for _, entity in ipairs(S.pointEntities(EFT.Registry.pointPools(), nil, from)) do
+        if entity == vehicle then return true end
+    end
+    return false
+end
+local reachId = R.add('global', 'vehicle', { label = 'Griff', distance = 2.0 }, 'res', { anchor = { bone = 'hood' } })
+check('a vehicle in reach of its options is walked', walksVehicle(world[vehicle].coords))
+check('a vehicle out of reach of its options is left out', not walksVehicle(world[vehicle].coords + vec3(11, 0, 0)))
+
+walksVehicle(world[vehicle].coords)
+local types = typeCalls[vehicle]
+S.classify(vehicle)
+S.classify(vehicle)
+check('an entity is classified once between two walks', typeCalls[vehicle] == types)
+walksVehicle(world[vehicle].coords)
+check('a walk classifies anew', typeCalls[vehicle] == types + 1)
+R.remove(reachId)
 
 -- A ray can come back after the cleanup already ran
 press()

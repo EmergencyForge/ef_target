@@ -25,14 +25,14 @@ function Menu.build(target, state)
     local rows = {}
     local now = GetGameTimer()
 
-    local function add(entry, id, options, target, distance, extra)
+    -- Runs every scan over every option of the target, most of them never become a row
+    local function add(entry, id, options, distance, point, zone)
+        local ctx = Menu.context({ point = point, entry = entry }, target)
         for index, option in ipairs(options) do
-            local row = { id = id .. ':' .. index, label = option.label, icon = option.icon, iconColor = option.iconColor,
-                divider = false, option = option, entry = entry, hold = Menu.holdTime(option),
-                submenu = option.openMenu ~= nil }
-            for k, v in pairs(extra or {}) do row[k] = v end
-            if EFT.Filter.static(option, distance, state.menu) and EFT.Filter.interact(option, Menu.context(row, target), now) then
-                rows[#rows + 1] = row
+            if EFT.Filter.static(option, distance, state.menu) and EFT.Filter.interact(option, ctx, now) then
+                rows[#rows + 1] = { id = id .. ':' .. index, label = option.label, icon = option.icon, iconColor = option.iconColor,
+                    divider = false, option = option, entry = entry, hold = Menu.holdTime(option),
+                    submenu = option.openMenu ~= nil, point = point, zone = zone }
             end
         end
     end
@@ -40,16 +40,16 @@ function Menu.build(target, state)
     local point = target.point
     if point then
         for _, entry in ipairs(point.entries) do
-            add(entry, entry.id, entry.options, target, point.distance, { point = point })
+            add(entry, entry.id, entry.options, point.distance, point)
         end
     end
     local pointRows = #rows
 
     for _, entry in ipairs(target.entries) do
-        add(entry, entry.id, entry.options, target, entry.unlimited and 0 or target.distance)
+        add(entry, entry.id, entry.options, entry.unlimited and 0 or target.distance)
     end
     for _, zone in ipairs(target.zones) do
-        add(zone, 'z' .. zone.id, zone.options, target, target.distance, { zone = zone.id })
+        add(zone, 'z' .. zone.id, zone.options, target.distance, nil, zone.id)
     end
 
     if pointRows > 0 and rows[pointRows + 1] then rows[pointRows + 1].divider = true end

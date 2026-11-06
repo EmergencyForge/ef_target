@@ -8,6 +8,8 @@ local SCAN_MS = 100
 local COLLECT_MS = 150
 -- Walking a game pool is the costly part of a scan and entities enter range slowly
 local WALK_MS = 500
+-- A point can sit half a long vehicle away from its origin, and the player keeps moving until the next walk
+local REACH_MARGIN = 8.0
 local FLAGS_ALL, FLAGS_ENTITIES = 511, 26
 local IGNORE_NO_COLLISION = 4
 local SHAPE_FAILED, SHAPE_PENDING = 0, 1
@@ -22,18 +24,30 @@ local current = nil
 local snappedKey = nil
 local collected, collectedFor, collectedMenu, nextCollect = {}, nil, nil, 0
 local known, walked, nextWalk, sightCursor = {}, {}, 0, 0
+-- Answers of classify until the next pool walk, false for an entity that does not count
+local classes = {}
 
 local contains = { sphere = EFT.Geometry.inSphere, box = EFT.Geometry.inBox, poly = EFT.Geometry.inPoly }
 
-function Scan.classify(entity)
-    if not entity or entity == 0 then return nil end
+local function readClass(entity)
     -- Rays can return handles the script host no longer knows
     local ok, entityType = pcall(GetEntityType, entity)
-    if not ok or entityType == 0 then return nil end
+    if not ok or entityType == 0 then return false end
     local ped = PlayerPedId()
-    if entity == ped or entity == GetVehiclePedIsIn(ped, false) then return nil end
+    if entity == ped or entity == GetVehiclePedIsIn(ped, false) then return false end
     local netId = NetworkGetEntityIsNetworked(entity) and NetworkGetNetworkIdFromEntity(entity) or nil
-    return entityType, GetEntityModel(entity), netId, entityType == 1 and IsPedAPlayer(entity)
+    return { entityType, GetEntityModel(entity), netId, entityType == 1 and IsPedAPlayer(entity) }
+end
+
+function Scan.classify(entity)
+    if not entity or entity == 0 then return nil end
+    local class = classes[entity]
+    if class == nil then
+        class = readClass(entity)
+        classes[entity] = class
+    end
+    if not class then return nil end
+    return class[1], class[2], class[3], class[4]
 end
 
 -- Anything that is not a vehicle model may live in either of the other pools
@@ -59,16 +73,32 @@ local function anchored(entries, show)
     return out
 end
 
+local function reachOf(entries)
+    local reach = 0.0
+    for _, entry in ipairs(entries) do
+        for _, option in ipairs(entry.options) do
+            local distance = option.distance or Config.DefaultDistance
+            if distance > reach then reach = distance end
+        end
+    end
+    return reach
+end
+
 -- Entities in reach that carry points, pools are the result of Registry.nearPools or pointPools.
 -- Only carriers come back, so everything that runs per scan stays clear of the bare entities in a pool.
+-- A vehicle too far for any of its options would only have its bones read to be thrown away again.
 function Scan.pointEntities(pools, show, center)
+    classes = {}
     local out, seen = {}, {}
     local function add(entity)
-        if seen[entity] or #(GetEntityCoords(entity) - center) > Config.RayLength then return end
+        if seen[entity] then return end
+        local distance = #(GetEntityCoords(entity) - center)
+        if distance > Config.RayLength then return end
         seen[entity] = true
         local entityType, model, netId, isPlayer = Scan.classify(entity)
-        if entityType and #anchored(EFT.Registry.forEntity(entity, entityType, model, netId, isPlayer), show) > 0 then
-            out[#out + 1] = entity
+        if entityType then
+            local entries = anchored(EFT.Registry.forEntity(entity, entityType, model, netId, isPlayer), show)
+            if #entries > 0 and distance <= reachOf(entries) + REACH_MARGIN then out[#out + 1] = entity end
         end
     end
     for name, on in pairs(gamePools(pools, show)) do
@@ -97,7 +127,7 @@ function Scan.collectPoints(entities, show, playerCoords)
     for _, entity in ipairs(entities) do
         local entityType, model, netId, isPlayer = Scan.classify(entity)
         if entityType then
-            append(Points.collect(entity, anchored(Registry.forEntity(entity, entityType, model, netId, isPlayer), show), playerCoords))
+            append(Points.collect(entity, anchored(Registry.forEntity(entity, entityType, model, netId, isPlayer), show), playerCoords, model))
         end
     end
     append(Points.collect(nil, anchored(Registry.coordsEntries(), show), playerCoords))
@@ -274,7 +304,7 @@ local function step(mine)
     local drawn = drawList(checked, playerCoords)
     local point = EFT.Points.snap(drawn, Config.SnapRadius, GetAspectRatio(false), snappedKey)
     snappedKey = point and point.key
-    if point and point.entity then point.coords = EFT.Points.resolve(point.entries[1], point.entity) or point.coords end
+    if point and point.entity then point.coords = EFT.Points.resolve(point.entries[1], point.entity, point.model) or point.coords end
 
     current = buildTarget(entity, coords, playerCoords, zonesAt(coords), point)
     Session.update(current)
@@ -288,7 +318,7 @@ function Scan.start()
     generation = generation + 1
     local mine = generation
     -- known stays: the check results of the last press save the next one from starting at zero
-    walked, nextWalk, current, snappedKey = {}, 0, nil, nil
+    walked, nextWalk, current, snappedKey, classes = {}, 0, nil, nil, {}
     collected, collectedFor, collectedMenu, nextCollect = {}, nil, nil, 0
     CreateThread(function()
         while mine == generation and EFT.Session.isActive() do

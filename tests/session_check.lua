@@ -40,13 +40,18 @@ _G.exports = {
     ox_lib = { progressActive = function() oxCalls = oxCalls + 1; if oxBusy == 'throw' then error('old lib') end return oxBusy end },
     ef_lib = { IsProgressBarActive = function() return false end },
 }
-check('idle ox_lib does not block', S.blocked() == false and oxCalls == 1)
+check('idle ox_lib does not block', S.blocked(true) == false and oxCalls == 1)
 oxBusy = true
-check('an active ox_lib progress blocks', S.blocked() == true)
+check('a scan keeps the last answer for a moment', S.blocked() == false and oxCalls == 1)
+check('an active ox_lib progress blocks', S.blocked(true) == true)
+_G.GetGameTimer = function() return 1250 end
+oxBusy = false
+check('the answer runs out', S.blocked() == false and oxCalls == 3)
+_G.GetGameTimer = function() return 1000 end
 oxBusy = 'throw'
-check('a throwing ox_lib export does not block', S.blocked() == false)
+check('a throwing ox_lib export does not block', S.blocked(true) == false)
 oxBusy, oxCalls, oxState = true, 0, 'stopped'
-check('a stopped ox_lib is not asked', S.blocked() == false and oxCalls == 0)
+check('a stopped ox_lib is not asked', S.blocked(true) == false and oxCalls == 0)
 _G.GetResourceState, _G.exports = nil, nil
 
 check('a session starts', S.begin() == true and S.isActive())

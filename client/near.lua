@@ -3,6 +3,8 @@ local Near = {}
 EFT.Near = Near
 
 local TICK_MS = 500
+-- Below a pixel at 1080p. Every send is a JSON string and a message into the browser.
+local PILL_STEP = 0.0002
 
 -- Points in reach with an allowed option, and the nearest of them
 local nearby, nearest = {}, nil
@@ -26,9 +28,9 @@ local function firstAllowed(point, now)
     end
 end
 
-function Near.tick(playerCoords, now)
+function Near.tick(playerCoords, now, fresh)
     nearby = {}
-    if EFT.Session.isActive() or EFT.Session.blocked() then return nil end
+    if EFT.Session.isActive() or EFT.Session.blocked(fresh) then return nil end
     if GetVehiclePedIsIn(PlayerPedId(), false) ~= 0 then return nil end
 
     local Scan = EFT.Scan
@@ -80,20 +82,25 @@ function Near.useKey()
 end
 
 local function pillFrames()
+    local sentX, sentY = -1.0, -1.0
     while nearest do
         local point = nearest
         -- Written back so the marker of a moving vehicle stays under the pill
-        point.coords = EFT.Points.resolve(point.entries[1], point.entity) or point.coords
+        point.coords = EFT.Points.resolve(point.entries[1], point.entity, point.model) or point.coords
         local c = point.coords
         local onScreen, x, y = GetScreenCoordFromWorldCoord(c.x, c.y, c.z)
         if onScreen then
-            EFT.Nui.pillPos(x, y)
+            if math.abs(x - sentX) > PILL_STEP or math.abs(y - sentY) > PILL_STEP then
+                sentX, sentY = x, y
+                EFT.Nui.pillPos(x, y)
+            end
             local label = point.option.label or ''
             if pillLabel ~= label then
                 pillLabel = label
                 EFT.Nui.pill(Near.useKey(), label, EFT.Menu.holdTime(point.option))
             end
         else
+            sentX = -1.0
             hidePill()
         end
         Wait(0)
@@ -168,7 +175,7 @@ function Near.holdTime()
 end
 
 function Near.use()
-    local point = Near.tick(GetEntityCoords(PlayerPedId()), GetGameTimer())
+    local point = Near.tick(GetEntityCoords(PlayerPedId()), GetGameTimer(), true)
     if not point then return end
     -- A use key press has no session: the row context comes from the point alone and a submenu has nowhere to open
     EFT.Select.run({ option = point.option, entry = point.entry, point = point }, {}, { history = {} })
