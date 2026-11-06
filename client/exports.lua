@@ -22,7 +22,7 @@ local function addPoint(data)
         options[i] = copy
     end
 
-    local extra = { show = data.show, label = data.label }
+    local extra = { show = data.show, label = data.label, icon = data.icon }
     if data.coords then
         -- Scripts also pass vector4 and plain tables, and the near check does vector3 math on this
         local c = data.coords

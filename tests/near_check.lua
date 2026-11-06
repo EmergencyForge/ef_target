@@ -478,7 +478,7 @@ pump(2)
 check('the end clears the aim', aimed == nil and not Render.isRunning())
 check('the end has no pill left to hide', count('pillHide') == hidesBefore)
 check('the scan forgets its target', S.current() == nil)
-pump(2)
+pump(20) -- the ring of the click runs out first
 check('the threads wind down', #threads == 0)
 check('the key stays held without a restart', not Session.isActive())
 release()

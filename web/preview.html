@@ -39,7 +39,7 @@
       function send(m) { window.postMessage(m, '*') }
       var index = 0
       var cur = 'two'
-      function show(name, title) { cur = name; index = 0; send({ action: 'show', rows: rows[name], title: title, index: 1 }) }
+      function show(name, title) { cur = name; index = 0; send({ action: 'show', rows: rows[name], title: title, icon: 'fa-solid fa-car-side', index: 1 }) }
       var buttons = [
         ['Zwei Optionen', function () { show('two', 'Fahrertür') }],
         ['Trennlinie', function () { show('divider', 'Person') }],
@@ -47,6 +47,7 @@
         ['80 Zeichen', function () { show('long', 'Fahrzeug') }],
         ['Weiter', function () { index = (index + 1) % rows[cur].length; send({ action: 'select', index: index + 1 }) }],
         ['Ausblenden', function () { send({ action: 'hide' }) }],
+        ['Ausführen', function () { send({ action: 'confirm' }); send({ action: 'hide' }) }],
         ['Pille', function () { send({ action: 'pill', key: 'E', label: 'Tür öffnen' }); send({ action: 'pillPos', x: 0.4, y: 0.5 }) }],
         ['Pille rechts', function () { send({ action: 'pill', key: 'E', label: 'Laderaum öffnen' }); send({ action: 'pillPos', x: 0.95, y: 0.3 }) }],
         ['Pille aus', function () { send({ action: 'pillHide' }) }],

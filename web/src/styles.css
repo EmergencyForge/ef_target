@@ -42,17 +42,32 @@ html, body {
 }
 
 .tp-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   padding: 5px 8px 6px;
   font-size: 11px;
   font-weight: 500;
   color: var(--text-3);
+}
+.tp-crumbs {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .tp-title b { font-weight: 500; color: var(--text); }
-.tp-title i { padding: 0 4px; font-style: normal; opacity: 0.55; }
+.tp-sep { padding: 0 4px; font-style: normal; opacity: 0.55; }
+.tp-icon { margin-right: 6px; font-size: 10.5px; }
+.tp-count {
+  flex: none;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
 
+.tp-body { position: relative; }
 .tp-view {
   position: relative;
   overflow: hidden;
@@ -70,6 +85,28 @@ html, body {
   overflow: hidden;
   scroll-behavior: smooth;
 }
+/* The fade replaces the hard cut and shrinks to nothing at the ends of the list, CEF 103 needs the prefix */
+.tp-list.scrolls {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--fade-top, 0px), #000 calc(100% - var(--fade-bottom, 0px)), transparent);
+}
+/* Sits in the padding of the panel, so it never touches the key on the row */
+.tp-rail {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  right: -3.5px;
+  width: 2px;
+}
+.tp-thumb {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.2);
+  transition: background 220ms var(--ease);
+}
+.tp-thumb.moving { background: rgba(255, 255, 255, 0.5); }
 
 .tp-push-enter-active, .tp-pop-enter-active { transition: transform 260ms var(--ease), opacity 260ms var(--ease); }
 .tp-push-leave-active, .tp-pop-leave-active { transition: transform 180ms ease-in, opacity 180ms ease-in; }
@@ -104,6 +141,16 @@ html, body {
 }
 @keyframes tp-fade {
   from { opacity: 0; }
+}
+
+/* The option has already run. The panel stays for the flash, then fades as usual. */
+.tp.confirmed:not(.show) {
+  transition: opacity 110ms var(--ease) 130ms, transform 110ms var(--ease) 130ms, visibility 0s linear 240ms;
+}
+.tp.confirmed .tp-cursor { animation: tp-confirm 260ms var(--ease); }
+.pill.confirmed { animation: tp-confirm 260ms var(--ease); }
+@keyframes tp-confirm {
+  from { background: rgba(var(--accent-rgb), 0.8); }
 }
 
 /* One element that travels, so the highlight, the key and the hold fill move as a unit */

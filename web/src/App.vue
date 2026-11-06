@@ -5,6 +5,7 @@ import KeyPill from './KeyPill.vue'
 
 const rows = ref<Row[]>([])
 const title = ref<string | undefined>()
+const icon = ref<string | undefined>()
 const index = ref(1)
 // The panel keeps its last rows while fading out, so hide only flips this flag
 const shown = ref(false)
@@ -16,6 +17,8 @@ const path = ref<string[]>([])
 const nav = ref<string | undefined>()
 const page = ref(0)
 const keyName = ref('E')
+const confirmed = ref(false)
+let confirmTimer: number | undefined
 const pill = ref<InstanceType<typeof KeyPill> | null>(null)
 
 function setAccent(hex: string) {
@@ -32,6 +35,13 @@ function setHold(ms: number) {
   root.classList.toggle('holding', ms > 0)
 }
 
+// Long enough for the panel to flash and fade out, see the delays on .confirmed
+function confirm() {
+  confirmed.value = true
+  window.clearTimeout(confirmTimer)
+  confirmTimer = window.setTimeout(() => (confirmed.value = false), 300)
+}
+
 function onMessage(e: MessageEvent) {
   const d = e.data
   if (!d || typeof d.action !== 'string') return
@@ -39,6 +49,7 @@ function onMessage(e: MessageEvent) {
     case 'show':
       rows.value = d.rows ?? []
       title.value = d.title || undefined
+      icon.value = d.icon || undefined
       index.value = d.index ?? 1
       path.value = d.path ?? []
       if (d.nav) {
@@ -46,6 +57,9 @@ function onMessage(e: MessageEvent) {
         page.value++
       }
       shown.value = true
+      break
+    case 'confirm':
+      confirm()
       break
     case 'select':
       index.value = d.index
@@ -85,12 +99,14 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
   <TargetPanel
     :rows="rows"
     :title="title"
+    :icon="icon"
     :index="index"
     :shown="shown"
     :path="path"
     :nav="nav"
     :page="page"
     :key-name="keyName"
+    :confirmed="confirmed"
   />
-  <KeyPill ref="pill" :key-name="pillKey" :label="pillLabel" :shown="pillShown" :hold="pillHold" />
+  <KeyPill ref="pill" :key-name="pillKey" :label="pillLabel" :shown="pillShown" :hold="pillHold" :confirmed="confirmed" />
 </template>

@@ -22,6 +22,8 @@ harness.load('client/select.lua')
 harness.load('client/nui.lua')
 harness.load('client/session.lua')
 local S = EFT.Session
+local pulses = 0
+EFT.Render = { pulse = function() pulses = pulses + 1 end }
 
 local ran = 0
 local function run() ran = ran + 1 end
@@ -59,6 +61,7 @@ S.update(two)
 check('the first row is selected', sent[#sent].index == 1)
 check('show carries only row display fields', sent[#sent].action == 'show' and sent[#sent].rows[1].onSelect == nil
     and sent[#sent].rows[1].option == nil and sent[#sent].title == 'Fahrzeug')
+check('show carries the icon of the target', sent[#sent].icon == 'fa-solid fa-car')
 local count = #sent
 S.update(two); check('nothing new means no message', #sent == count)
 S.wheel(1); S.wheel(1); check('the wheel wraps around', sent[#sent].action == 'select' and sent[#sent].index == 1)
@@ -73,11 +76,14 @@ S.click(); check('a click on a deleted entity runs nothing', ran == 0 and sent[#
 natives.DoesEntityExist = function() return true end
 S.update(one); S.click()
 check('a run option ends the session', ran == 1 and not S.isActive())
+check('a run option confirms once', pulses == 1 and sent[#sent - 1].action == 'confirm')
 
 S.begin()
+pulses = 0
 local sub = target({ { name = 'sub', label = 'Sub', openMenu = 'm' }, { name = 'in', label = 'In', menuName = 'm', onSelect = run } })
 S.update(sub); S.click()
 check('a submenu keeps the session open', S.isActive() and sent[#sent].action == 'show' and #sent[#sent].path == 1)
+check('opening a submenu confirms nothing', pulses == 0)
 S.stop('test')
 S.begin(); S.update(sub)
 check('stop resets the menu', #sent[#sent].path == 0)

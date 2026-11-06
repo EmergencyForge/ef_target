@@ -85,7 +85,7 @@ function Points.collect(entity, entries, playerCoords, model)
                     point.entries[#point.entries + 1] = entry
                 elseif not mergesInto(points, entry, coords) then
                     point = {
-                        key = key, coords = coords, label = entry.label, entries = { entry },
+                        key = key, coords = coords, label = entry.label, icon = entry.icon, entries = { entry },
                         show = entry.show, entity = entity, model = model,
                         distance = #(coords - playerCoords),
                     }

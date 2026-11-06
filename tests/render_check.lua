@@ -81,6 +81,22 @@ check('a point is a diamond', first.name == 'point' and math.abs(first.heading -
 check('the own marker is a diamond', sprites[#sprites].name:sub(1, 5) == 'frame' and math.abs(sprites[#sprites].heading - 45.0) < 0.1)
 check('sprite height follows the aspect ratio', math.abs(first.h / first.w - 16 / 9) < 1e-6)
 
+local function pointSprites(list)
+    Render.setPoints(list)
+    sprites = {}; Render.drawFrame()
+    local out = {}
+    for _, sp in ipairs(sprites) do if sp.name == 'point' then out[#out + 1] = sp end end
+    return out
+end
+local close, mid, far = table.unpack(pointSprites({
+    { key = 'd1', coords = vec3(1, 0, 0), distance = 0.5 },
+    { key = 'd2', coords = vec3(2, 0, 0), distance = 4.0 },
+    { key = 'd3', coords = vec3(3, 0, 0), distance = 30.0 },
+}))
+check('a nearer point is drawn bigger', close.w > mid.w and mid.w > far.w)
+check('a nearer point is drawn stronger', close.alpha == 255 and mid.alpha < 255 and far.alpha < mid.alpha and far.alpha > 0)
+Render.setPoints({ thirty[1] })
+
 local function alpha(name, x, y) return textures[name].alpha[(y + 32) * 64 + x + 32] end
 local function shade(name, x, y) return textures[name].shade[(y + 32) * 64 + x + 32] end
 check('every texture is committed', committed.fill and committed.point and committed.frame0 and committed.frame5)
@@ -148,7 +164,7 @@ local function headings()
     return sprites[1], sprites[#sprites]
 end
 Render = fresh()
-Render.start(); Render.setPoints({ thirty[1] }); Render.setAim({}, false)
+Render.start(); Render.setPoints({ { key = 'n', coords = vec3(1, 0, 0), distance = 1.0 } }); Render.setAim({}, false)
 local point, marker = headings()
 check('a marker starts as a square', marker.heading < 10.0 and point.heading < 10.0)
 frames(60)
@@ -181,6 +197,27 @@ marker = select(2, headings())
 check('a new aim starts where the marker was', math.abs(marker.x + 0.2) < 0.03)
 frames(60); marker = select(2, headings())
 check('the marker lands on its target', math.abs(marker.x) < 0.001)
+
+local function ring()
+    sprites = {}; Render.drawFrame()
+    for _, sp in ipairs(sprites) do if sp.name == 'ring' then return sp end end
+end
+check('without a pulse there is no ring', ring() == nil)
+Render.setAim({ key = 'p', coords = vec3(0, 0, 0) }, true); frames(60)
+local before = cleared
+Render.pulse()
+local start = ring()
+check('a pulse draws a ring at the marker', start and start.x == 0.0 and cleared == before + 1)
+frames(5)
+local later = ring()
+check('the ring grows and fades', later.w > start.w and later.alpha < start.alpha)
+Render.setAim(nil, false); Render.stop()
+frames(4)
+check('the ring outlives the session', Render.needsFrame())
+frames(40)
+check('the ring ends', ring() == nil)
+Render.pulse()
+check('without a marker a pulse does nothing', ring() == nil)
 Render.setAim(nil, false); Render.stop()
 
 -- The thread runs inline here, a Wait hook ends it after the springs settled on a hit

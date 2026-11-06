@@ -18,7 +18,7 @@ Das Manifest enthält `provide 'ox_target'`, `provide 'qb-target'` und `provide 
 
 ## Bedienung
 
-Alt halten (`LMENU`, in den FiveM-Tastenbelegungen änderbar). In der Bildmitte dreht sich eine Raute aus vier Ecken ein, beim Loslassen dreht sie sich wieder heraus, Punkte in Reichweite erscheinen als kleine Rauten. Trifft der Strahl eine Entity oder Zone, oder liegt ein Punkt nahe der Bildmitte, schließt und füllt sich die Raute in der Akzentfarbe aus ef_lib, und das Panel zeigt die Optionen.
+Alt halten (`LMENU`, in den FiveM-Tastenbelegungen änderbar). In der Bildmitte dreht sich eine Raute aus vier Ecken ein, beim Loslassen dreht sie sich wieder heraus, Punkte in Reichweite erscheinen als kleine Rauten, nahe groß und deutlich, ferne kleiner und blasser. Trifft der Strahl eine Entity oder Zone, oder liegt ein Punkt nahe der Bildmitte, schließt und füllt sich die Raute in der Akzentfarbe aus ef_lib, und das Panel zeigt die Optionen.
 
 - Mausrad wählt die Option, Linksklick oder E löst aus. Bei nur einer Option reicht der Klick.
 - Optionen mit `hold` zeigen "halten": Taste gedrückt lassen, die Zeile füllt sich. Loslassen oder eine andere Zeile wählen bricht ab.
@@ -86,6 +86,7 @@ exports.ef_target:IsActive()
 | `show` | `'alt'` (Standard) oder `'near'` |
 | `distance` | Reichweite, gilt für Optionen ohne eigenes `distance` |
 | `label` | Titel des Panels |
+| `icon` | Icon neben dem Titel, ohne Angabe das Icon der ersten Option, `false` zeigt keins |
 | `options` | Optionen |
 
 Genau eins von `global`, `model`, `entity`, `coords` ist nötig. Bei den drei ersten außerdem `bone` oder `offset`, sonst wirft der Aufruf einen Fehler.
@@ -104,7 +105,7 @@ exports.ef_target:AddSphereZone({ coords = vec3(..), radius = 2.0, options = {} 
 exports.ef_target:AddPolyZone({ points = { vec3(..), vec3(..), vec3(..) }, thickness = 4.0, options = {} })
 ```
 
-`size` ist die volle Ausdehnung je Achse, `rotation` dreht die Box um Z. Bei Polyzonen gilt die Höhe der Punkte im Mittel, `thickness` ist die Gesamthöhe. Weitere Felder: `name` (für `Remove` und gleiche Namen in mehreren Zonen), `label` (Titel des Panels), `drawSprite`. Ein `Remove` mit dem Namen entfernt alle Zonen dieses Namens.
+`size` ist die volle Ausdehnung je Achse, `rotation` dreht die Box um Z. Bei Polyzonen gilt die Höhe der Punkte im Mittel, `thickness` ist die Gesamthöhe. Weitere Felder: `name` (für `Remove` und gleiche Namen in mehreren Zonen), `label` (Titel des Panels), `icon` (ohne Angabe ein Ortssymbol, `false` zeigt keins), `drawSprite`. Ein `Remove` mit dem Namen entfernt alle Zonen dieses Namens.
 
 ### Felder einer Option
 

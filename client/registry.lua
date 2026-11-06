@@ -109,7 +109,7 @@ local function buildEntries(id, resource, options, extra)
     local show = extra.show or 'alt'
     -- source is the option an entry was split from, so points can merge close anchors of one option only
     local function entry(list, anchor, source)
-        return { id = id, resource = resource, options = list, anchor = anchor, show = show, label = extra.label, source = source }
+        return { id = id, resource = resource, options = list, anchor = anchor, show = show, label = extra.label, icon = extra.icon, source = source }
     end
     if extra.anchor then return { entry(options, extra.anchor) } end
 

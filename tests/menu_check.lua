@@ -11,6 +11,8 @@ EFT.Framework = { hasGroup = function() return true end, hasItems = function() r
 harness.load('client/filter.lua')
 harness.load('client/menu.lua')
 harness.load('client/select.lua')
+EFT.Nui = { confirm = function() end }
+EFT.Render = { pulse = function() end }
 local M, S = EFT.Menu, EFT.Select
 
 local function entry(options, extra)
@@ -36,6 +38,16 @@ check('the title is the point label', title == 'Tür')
 check('without a point there is no divider', not M.build(noPoint, state)[1].divider)
 check('the title falls back to the entity type', select(2, M.build(noPoint, state)) == 'Fahrzeug')
 check('a zone only target is titled by the zone', select(2, M.build({ entries = {}, zones = { zone }, entity = 0, entityType = 0, coords = vec3(0, 0, 0), distance = 1 }, state)) == 'Zone')
+
+local function iconOf(t) return select(3, M.build(t, state)) end
+local zoneOnly = { entries = {}, zones = { zone }, entity = 0, entityType = 0, coords = vec3(0, 0, 0), distance = 1 }
+check('an entity brings the icon of its type', iconOf(noPoint) == 'fa-solid fa-car')
+check('a zone brings the zone icon', iconOf(zoneOnly) == 'fa-solid fa-location-dot')
+zone.icon = 'fa-solid fa-star'
+check('a zone can set its icon', iconOf(zoneOnly) == 'fa-solid fa-star')
+zone.icon = false
+check('a zone can turn its icon off', iconOf(zoneOnly) == nil)
+zone.icon = nil
 
 local inSub = { entries = { entry({ { label = 'Sub', menuName = 'sub' }, { label = 'Home' } }) }, zones = {}, entity = 5, entityType = 1, coords = vec3(0, 0, 0), distance = 1 }
 local subRows = M.build(inSub, { menu = 'sub', history = {} })

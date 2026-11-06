@@ -116,18 +116,18 @@ function Session.update(newTarget)
         state.menu, state.history, trail = nil, {}, {}
     end
 
-    local newRows, title = EFT.Menu.build(newTarget, state)
+    local newRows, title, icon = EFT.Menu.build(newTarget, state)
     -- An emptied submenu has no row left to back out with
     if #newRows == 0 and state.menu then
         state.menu, state.history, trail = nil, {}, {}
-        newRows, title = EFT.Menu.build(newTarget, state)
+        newRows, title, icon = EFT.Menu.build(newTarget, state)
     end
     if #newRows == 0 then return hide() end
     local snapped = pointKey(newTarget) and pointKey(target) ~= pointKey(newTarget)
     target = newTarget
 
-    -- Title is part of the key: a point can rename the panel without changing a single row
-    local sig = EFT.Menu.signature(newRows) .. '\29' .. (title or '')
+    -- Title and icon are part of the key: a point can rename the panel without changing a single row
+    local sig = EFT.Menu.signature(newRows) .. '\29' .. (title or '') .. '\29' .. (icon or '')
     if sig == signature then
         rows = newRows
         -- Split bones of one option give equal rows, the new point still starts at the top
@@ -149,7 +149,7 @@ function Session.update(newTarget)
         end
     end
     rows, signature, index, shown = newRows, sig, newIndex, true
-    EFT.Nui.show(rows, title, index, labels(), nav)
+    EFT.Nui.show(rows, title, index, labels(), nav, icon)
     nav, restore = nil, nil
 end
 

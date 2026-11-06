@@ -12,6 +12,13 @@ local HEADING = 45.0
 local FADE_END = 0.35 -- share of the turn after which a marker is fully visible
 local GONE = 0.02
 local COVERED = 0.2 -- a point hides once the marker has slid this close to it
+-- A point at or inside DEPTH_NEAR metres is drawn big and solid, at DEPTH_FAR small and pale
+local DEPTH_NEAR, DEPTH_FAR = 1.0, 7.0
+local NEAR_SCALE, FAR_SCALE = 1.25, 0.7
+local FAR_ALPHA = 0.45
+local PULSE_TIME = 0.32 -- seconds the ring needs to run out
+local PULSE_GROW = 2.4 -- extra marker widths the ring gains on its way
+local PULSE_KICK = 7.0 -- pushes the scale spring, so the marker jumps once when an option runs
 
 -- Painted at runtime and not shipped as files, so the line width can come from the config
 local SIZE = 64
@@ -48,6 +55,8 @@ local pointTurn = { value = 0.0, velocity = 0.0 }
 local slide = { value = 0.0, velocity = 0.0 }
 local slideX, slideY = 0.0, 0.0
 local lastId, lastX, lastY = nil, nil, nil
+-- Seconds left and where the ring started, it stays there after the session has ended
+local pulseLeft, pulseCoords = 0.0, nil
 
 local function resetSprings()
     fill.value, fill.velocity = 0.0, 0.0
@@ -110,6 +119,8 @@ local function loadTextures()
         local txd = CreateRuntimeTxd(TXD)
         paint(txd, 'fill', function(dx, dy) return math.max(math.abs(dx), math.abs(dy)) <= HALF and LINE or nil end)
         paint(txd, 'point', frameShape(POINT_STROKE, 0, false))
+        -- Thinner than the marker, the ring is drawn at up to three times its size
+        paint(txd, 'ring', frameShape(stroke * 0.45, 0, false))
         for i = 0, FRAMES - 1 do
             paint(txd, FRAME_NAMES[i], frameShape(stroke, (HALF - CORNER) * (1 - i / (FRAMES - 1)), reticle.CenterDot))
         end
@@ -127,8 +138,9 @@ local function sprite(name, x, y, width, heading, r, g, b, a)
     DrawSprite(TXD, name, x, y, width, width * aspect, heading, r, g, b, a)
 end
 
-local function drawPoint(heading, alpha)
-    sprite('point', 0.0, 0.0, AIM_WIDTH * POINT_SCALE, heading, 255, 255, 255, math.floor(255 * alpha))
+local function drawPoint(point, heading, alpha)
+    sprite('point', 0.0, 0.0, AIM_WIDTH * POINT_SCALE * point.drawScale, heading, 255, 255, 255,
+        math.floor(255 * alpha * point.drawAlpha))
 end
 
 -- Fill runs from 0 to 1 with the hit: the corners grow into closed sides and the inside takes the accent
@@ -143,8 +155,14 @@ local function drawAim(x, y, ar, ag, ab)
         math.floor(255 * alpha))
 end
 
+local function drawPulse(x, y, r, g, b)
+    local left = pulseLeft / PULSE_TIME
+    local out = 1.0 - left * left * left
+    sprite('ring', x, y, AIM_WIDTH * (1.0 + PULSE_GROW * out), HEADING, r, g, b, math.floor(255 * left))
+end
+
 function Render.needsFrame()
-    return (active and (#points > 0 or aim ~= nil)) or aimTurn.value > GONE or pointTurn.value > GONE
+    return (active and (#points > 0 or aim ~= nil)) or aimTurn.value > GONE or pointTurn.value > GONE or pulseLeft > 0.0
 end
 
 function Render.drawFrame()
@@ -183,11 +201,17 @@ function Render.drawFrame()
         -- The aimed point is drawn by the aim marker, two sprites would fight
         if not point.offScreen and not (covered and (marked == point or (point.key and point.key == marked.key))) then
             SetDrawOrigin(point.coords.x, point.coords.y, point.coords.z, 0)
-            drawPoint(heading, alpha)
+            drawPoint(point, heading, alpha)
         end
     end
 
     local r, g, b = EFT.Accent.rgb()
+    local pulsing = pulseLeft > 0.0
+    if pulsing then pulseLeft = math.max(0.0, pulseLeft - dt) end
+    if pulsing and pulseCoords then
+        SetDrawOrigin(pulseCoords.x, pulseCoords.y, pulseCoords.z, 0)
+        drawPulse(0.0, 0.0, r, g, b)
+    end
     if marked and marked.coords then
         SetDrawOrigin(marked.coords.x, marked.coords.y, marked.coords.z, 0)
         drawAim(offsetX, offsetY, r, g, b)
@@ -195,6 +219,7 @@ function Render.drawFrame()
     -- Each SetDrawOrigin replaces the one before, so once per frame is enough.
     -- It has to stay before the centre marker, which draws in plain screen coords.
     ClearDrawOrigin()
+    if pulsing and not pulseCoords then drawPulse(0.5, 0.5, r, g, b) end
     if marked and not marked.coords then
         drawAim(0.5 + offsetX, 0.5 + offsetY, r, g, b)
     end
@@ -222,7 +247,15 @@ function Render.setPoints(list)
     for i, point in ipairs(list) do sorted[i] = point end
     table.sort(sorted, function(a, b) return (a.distance or 0) < (b.distance or 0) end)
     points = {}
-    for i = 1, math.min(#sorted, Config.MaxPoints) do points[i] = sorted[i] end
+    for i = 1, math.min(#sorted, Config.MaxPoints) do
+        local point = sorted[i]
+        local depth = ((point.distance or 0) - DEPTH_NEAR) / (DEPTH_FAR - DEPTH_NEAR)
+        if depth < 0.0 then depth = 0.0 elseif depth > 1.0 then depth = 1.0 end
+        -- Here and not per frame: distances only change with the list
+        point.drawScale = NEAR_SCALE + (FAR_SCALE - NEAR_SCALE) * depth
+        point.drawAlpha = 1.0 + (FAR_ALPHA - 1.0) * depth
+        points[i] = point
+    end
     wake()
 end
 
@@ -232,6 +265,14 @@ function Render.setAim(point, hit)
     lastAim = point or lastAim
     aimHit = hit and true or false
     wake()
+end
+
+-- Called when an option runs. Near points have no marker to start from, aim is nil outside a session.
+function Render.pulse()
+    if not aim then return end
+    pulseLeft, pulseCoords = PULSE_TIME, aim.coords
+    wake()
+    scale.velocity = scale.velocity + PULSE_KICK
 end
 
 function Render.start()

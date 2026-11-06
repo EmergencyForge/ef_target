@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-defineProps<{ keyName: string; label: string; shown: boolean; hold?: string }>()
+defineProps<{ keyName: string; label: string; shown: boolean; hold?: string; confirmed?: boolean }>()
 
 const el = ref<HTMLElement | null>(null)
 
@@ -19,7 +19,7 @@ defineExpose({ place })
 </script>
 
 <template>
-  <div ref="el" class="pill" :class="{ show: shown }">
+  <div ref="el" class="pill" :class="{ show: shown, confirmed }">
     <b class="fill"></b>
     <span class="kbd">{{ keyName }}</span>
     <span>{{ label }}</span>

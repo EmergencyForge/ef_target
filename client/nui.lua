@@ -7,17 +7,18 @@ local function send(message)
 end
 
 -- Only display fields cross into the browser, callbacks and option tables stay on the Lua side
-function Nui.show(rows, title, index, path, nav)
+function Nui.show(rows, title, index, path, nav, icon)
     local out = {}
     for i, row in ipairs(rows) do
         out[i] = { id = row.id, label = row.label, icon = row.icon, iconColor = row.iconColor, divider = row.divider,
             submenu = row.submenu, hold = row.hold and L('halten') or nil }
     end
-    send({ action = 'show', rows = out, title = title, index = index, path = path, nav = nav })
+    send({ action = 'show', rows = out, title = title, icon = icon, index = index, path = path, nav = nav })
 end
 
 function Nui.select(index) send({ action = 'select', index = index }) end
 function Nui.hide() send({ action = 'hide' }) end
+function Nui.confirm() send({ action = 'confirm' }) end
 function Nui.pill(key, label, hold) send({ action = 'pill', key = key, label = label, hold = hold and L('halten') or nil }) end
 function Nui.pillPos(x, y) send({ action = 'pillPos', x = x, y = y }) end
 function Nui.pillHide() send({ action = 'pillHide' }) end

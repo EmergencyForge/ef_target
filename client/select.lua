@@ -54,6 +54,12 @@ function Select.run(row, target, state)
     if entity and entity ~= 0 and not DoesEntityExist(entity) then return 'stale' end
     if not EFT.Filter.force(option, context) then return 'stale' end
 
+    -- Before the call: an option may block for a whole progress bar
+    if not option.openMenu then
+        EFT.Nui.confirm()
+        EFT.Render.pulse()
+    end
+
     local result = 'closed'
     local savedMenu, savedHistory = state.menu, #state.history
     if option.openMenu then
