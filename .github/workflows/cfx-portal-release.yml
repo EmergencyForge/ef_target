@@ -1,0 +1,72 @@
+name: Cfx Portal Release
+
+on:
+  release:
+    # Not prereleased: it stays silent for pre-releases published from a draft.
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+
+    steps:
+      # A shell check, because `prerelease && beta || stable` in an expression
+      # cannot also set the release candidate flag for scripts without a beta
+      # asset. Those pre-releases go to the live asset, flagged as candidates.
+      - name: Pick asset
+        id: asset
+        env:
+          PRERELEASE: ${{ github.event.release.prerelease }}
+          STABLE_ID: ${{ secrets.CFX_ASSET_ID }}
+          BETA_ID: ${{ secrets.CFX_BETA_ASSET_ID }}
+        run: |
+          if [ "$PRERELEASE" = "true" ] && [ -n "$BETA_ID" ]; then
+            ID="$BETA_ID"
+            CANDIDATE=false
+          else
+            ID="$STABLE_ID"
+            CANDIDATE="$PRERELEASE"
+          fi
+
+          [ -n "$ID" ] || {
+            echo "::error::Secret CFX_ASSET_ID is missing."
+            exit 1
+          }
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+          echo "candidate=$CANDIDATE" >> "$GITHUB_OUTPUT"
+
+      # Build the tagged commit, not the default branch: a draft published later
+      # would otherwise ship newer code under the old version.
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Build ZIP
+        run: |
+          VERSION="${TAG#v}"
+          mkdir build
+          mkdir -p build/ef_target/web
+          cp -r client server shared config.lua example.lua fxmanifest.lua README.md DOCUMENTATION.md LICENSE build/ef_target/
+          cp -r web/dist build/ef_target/web/dist
+
+          # The action reads the portal version from the packed manifest.
+          sed -i "s/^version .*/version '$VERSION'/" build/ef_target/fxmanifest.lua
+          grep -Fx "version '$VERSION'" build/ef_target/fxmanifest.lua
+
+          (cd build && zip -q -r ../ef_target.zip ef_target)
+
+      - name: Upload to Cfx Portal
+        uses: EmergencyForge/cfx-portal-upload@8770cb16929765d6e159f4fd7a64febd067b3d0f # v1.2.6-ef.1
+        with:
+          cookie: ${{ secrets.CFX_FORUM_COOKIE }}
+          assetId: ${{ steps.asset.outputs.id }}
+          makeZip: false
+          zipPath: ${{ github.workspace }}/ef_target.zip
+          beta: ${{ steps.asset.outputs.candidate }}
+          changelog: ${{ github.event.release.body }}
