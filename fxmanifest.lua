@@ -7,6 +7,7 @@ description 'EF Target - third-eye targeting for FiveM'
 version '2026.1.0'
 
 lua54 'yes'
+use_experimental_fxv2_oal 'yes'
 
 dependency 'ef_lib'
 

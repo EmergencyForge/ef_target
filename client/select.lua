@@ -57,7 +57,6 @@ function Select.run(row, target, state)
     -- Before the call: an option may block for a whole progress bar
     if not option.openMenu then
         EFT.Nui.confirm()
-        EFT.Render.pulse()
     end
 
     local result = 'closed'

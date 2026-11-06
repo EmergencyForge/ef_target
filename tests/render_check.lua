@@ -198,28 +198,6 @@ check('a new aim starts where the marker was', math.abs(marker.x + 0.2) < 0.03)
 frames(60); marker = select(2, headings())
 check('the marker lands on its target', math.abs(marker.x) < 0.001)
 
-local function ring()
-    sprites = {}; Render.drawFrame()
-    for _, sp in ipairs(sprites) do if sp.name == 'ring' then return sp end end
-end
-check('without a pulse there is no ring', ring() == nil)
-Render.setAim({ key = 'p', coords = vec3(0, 0, 0) }, true); frames(60)
-local before = cleared
-Render.pulse()
-local start = ring()
-check('a pulse draws a ring at the marker', start and start.x == 0.0 and cleared == before + 1)
-frames(5)
-local later = ring()
-check('the ring grows and fades', later.w > start.w and later.alpha < start.alpha)
-Render.setAim(nil, false); Render.stop()
-frames(4)
-check('the ring outlives the session', Render.needsFrame())
-frames(40)
-check('the ring ends', ring() == nil)
-Render.pulse()
-check('without a marker a pulse does nothing', ring() == nil)
-Render.setAim(nil, false); Render.stop()
-
 -- The thread runs inline here, a Wait hook ends it after the springs settled on a hit
 local waits = 0
 natives.CreateThread = function(fn) fn() end

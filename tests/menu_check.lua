@@ -12,7 +12,6 @@ harness.load('client/filter.lua')
 harness.load('client/menu.lua')
 harness.load('client/select.lua')
 EFT.Nui = { confirm = function() end }
-EFT.Render = { pulse = function() end }
 local M, S = EFT.Menu, EFT.Select
 
 local function entry(options, extra)

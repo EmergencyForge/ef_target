@@ -22,8 +22,13 @@ harness.load('client/select.lua')
 harness.load('client/nui.lua')
 harness.load('client/session.lua')
 local S = EFT.Session
-local pulses = 0
-EFT.Render = { pulse = function() pulses = pulses + 1 end }
+local function confirms()
+    local n = 0
+    for _, message in ipairs(sent) do
+        if message.action == 'confirm' then n = n + 1 end
+    end
+    return n
+end
 
 local ran = 0
 local function run() ran = ran + 1 end
@@ -76,14 +81,14 @@ S.click(); check('a click on a deleted entity runs nothing', ran == 0 and sent[#
 natives.DoesEntityExist = function() return true end
 S.update(one); S.click()
 check('a run option ends the session', ran == 1 and not S.isActive())
-check('a run option confirms once', pulses == 1 and sent[#sent - 1].action == 'confirm')
+check('a run option confirms once', confirms() == 1 and sent[#sent - 1].action == 'confirm')
 
 S.begin()
-pulses = 0
+local confirmed = confirms()
 local sub = target({ { name = 'sub', label = 'Sub', openMenu = 'm' }, { name = 'in', label = 'In', menuName = 'm', onSelect = run } })
 S.update(sub); S.click()
 check('a submenu keeps the session open', S.isActive() and sent[#sent].action == 'show' and #sent[#sent].path == 1)
-check('opening a submenu confirms nothing', pulses == 0)
+check('opening a submenu confirms nothing', confirms() == confirmed)
 S.stop('test')
 S.begin(); S.update(sub)
 check('stop resets the menu', #sent[#sent].path == 0)
