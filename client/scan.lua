@@ -2,7 +2,7 @@
 local Scan = {}
 EFT.Scan = Scan
 
-local SCAN_MS = 80
+local SCAN_MS = 100
 -- Rebuilding the points resolves every bone of every vehicle around, far too much for each scan.
 -- The aimed point stays exact on its own, only the others on a moving vehicle step at this rate.
 local COLLECT_MS = 150
