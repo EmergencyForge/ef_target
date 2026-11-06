@@ -184,19 +184,19 @@ function Render.drawFrame()
         if not point.offScreen and not (covered and (marked == point or (point.key and point.key == marked.key))) then
             SetDrawOrigin(point.coords.x, point.coords.y, point.coords.z, 0)
             drawPoint(heading, alpha)
-            ClearDrawOrigin()
         end
     end
 
-    if marked then
-        local r, g, b = EFT.Accent.rgb()
-        if marked.coords then
-            SetDrawOrigin(marked.coords.x, marked.coords.y, marked.coords.z, 0)
-            drawAim(offsetX, offsetY, r, g, b)
-            ClearDrawOrigin()
-        else
-            drawAim(0.5 + offsetX, 0.5 + offsetY, r, g, b)
-        end
+    local r, g, b = EFT.Accent.rgb()
+    if marked and marked.coords then
+        SetDrawOrigin(marked.coords.x, marked.coords.y, marked.coords.z, 0)
+        drawAim(offsetX, offsetY, r, g, b)
+    end
+    -- Each SetDrawOrigin replaces the one before, so once per frame is enough.
+    -- It has to stay before the centre marker, which draws in plain screen coords.
+    ClearDrawOrigin()
+    if marked and not marked.coords then
+        drawAim(0.5 + offsetX, 0.5 + offsetY, r, g, b)
     end
 end
 

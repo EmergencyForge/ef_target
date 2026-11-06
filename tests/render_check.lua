@@ -29,7 +29,7 @@ local drawn = {}
 natives.SetDrawOrigin = function(x) origins = origins + 1; drawn[#drawn + 1] = x end
 natives.ClearDrawOrigin = function() cleared = cleared + 1 end
 natives.DrawSprite = function(_, name, x, y, w, h, heading, _, _, _, a)
-    sprites[#sprites + 1] = { name = name, x = x, y = y, w = w, h = h, heading = heading, alpha = a }
+    sprites[#sprites + 1] = { name = name, x = x, y = y, w = w, h = h, heading = heading, alpha = a, clears = cleared }
 end
 
 harness.load('client/eft.lua')
@@ -63,14 +63,14 @@ Render.start(); Render.setPoints(thirty)
 check('start marks the renderer running', Render.isRunning())
 Render.drawFrame()
 check('draw origins stay below the limit', origins <= Config.MaxPoints + 1)
-check('every origin is cleared', cleared == origins)
+check('a frame clears the origin once', cleared == 1)
 
 origins, cleared, drawn = 0, 0, {}
 Render.setAim(thirty[30], true); Render.drawFrame()
 local lowest, seen = 99, {}
 for _, x in ipairs(drawn) do lowest = math.min(lowest, x); seen[x] = true end
 check('the nearest points win the limit', #drawn == Config.MaxPoints and lowest == 7 and seen[30] and seen[7])
-check('every origin is cleared with an aim', cleared == origins)
+check('a frame with an aim clears the origin once', cleared == 1)
 
 sprites = {}
 local function frames(n) for _ = 1, n do Render.drawFrame() end end
@@ -94,8 +94,9 @@ check('a point has no dot and no gap', alpha('point', 0, 0) == 0 and alpha('poin
 
 sprites = {}
 Render.setPoints({}); Render.setAim({}, false); frames(60)
-sprites = {}; Render.drawFrame()
+sprites = {}; cleared = 0; Render.drawFrame()
 check('an aim without coords draws at the screen centre', sprites[1] and math.abs(sprites[1].x - 0.5) < 0.001 and sprites[1].y == 0.5)
+check('the centre marker draws after the origin is gone', sprites[1].clears == 1)
 
 Render.setPoints({}); Render.setAim(nil, false)
 check('the marker turns away before the thread stops', Render.needsFrame())
