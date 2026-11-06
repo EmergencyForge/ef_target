@@ -56,15 +56,11 @@ files {
     'web/dist/**/*'
 }
 
--- Open source under GPL-3.0: nothing gets encrypted on a Cfx escrow upload
+-- Stay readable after a Cfx escrow upload, the rest gets encrypted
 escrow_ignore {
-    '*.lua',
-    '*.md',
-    'client/**',
-    'server/**',
-    'shared/**',
-    'tests/**',
-    'docs/**',
-    'examples/**',
-    'web/**',
+    'config.lua',
+    'example.lua',
+    'shared/locale.lua',
+    'README.md',
+    'DOCUMENTATION.md',
 }
