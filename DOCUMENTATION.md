@@ -185,6 +185,8 @@ lua tests/run.lua
 
 Die Tests laufen mit reinem Lua außerhalb von FiveM. Das Panel wird in `web/` mit `bun run build` gebaut, `web/preview.html` zeigt Panel und Pille im Browser.
 
+Zum Ausprobieren im Spiel liegt in `examples/ef_target_test` eine eigene Ressource mit 16 Stationen auf dem Flugfeld von Sandy Shores: jede Art von Punkt und Zone, Untermenü, Halten, Rechte und die Kompatibilität zu ox_target und qb-target. Den Ordner in `resources` kopieren, `ensure ef_target_test` starten, `/eftest` teleportiert hin und zurück. Sie ist für Testserver gedacht, die Optionen am Getränkeautomaten gelten für jeden Automaten auf der Karte.
+
 ## Lizenz
 
 GPL-3.0. Es wurde kein Code aus ox_target übernommen, nur die Namen der Exports.

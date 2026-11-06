@@ -64,5 +64,6 @@ escrow_ignore {
     'shared/**',
     'tests/**',
     'docs/**',
+    'examples/**',
     'web/**',
 }
