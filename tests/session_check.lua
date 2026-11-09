@@ -8,7 +8,13 @@ _G.L = function(text) return text end
 _G.GetGameTimer = function() return 1000 end
 _G.json = { encode = function(t) return t end }
 local sent = {}
-natives.SendNuiMessage = function(msg) sent[#sent + 1] = msg end
+natives.SendDuiMessage = function(_, msg) sent[#sent + 1] = msg end
+natives.CreateDui = function() return 1 end
+natives.GetDuiHandle = function() return 'dui' end
+natives.CreateRuntimeTextureFromDuiHandle = function() return 1 end
+natives.GetCurrentResourceName = function() return 'ef_target' end
+natives.CreateRuntimeTxd = function() return 1 end
+natives.AddEventHandler = function() end
 natives.DoesEntityExist = function() return true end
 natives.IsPauseMenuActive = function() return false end
 natives.IsNuiFocused = function() return false end
@@ -20,6 +26,8 @@ harness.load('client/filter.lua')
 harness.load('client/menu.lua')
 harness.load('client/select.lua')
 harness.load('client/nui.lua')
+local places = 0
+EFT.Surface = { place = function() places = places + 1 end, visible = function() end }
 harness.load('client/session.lua')
 local S = EFT.Session
 local function confirms()
@@ -65,10 +73,11 @@ check('a session starts', S.begin() == true and S.isActive())
 S.update(two)
 check('the first row is selected', sent[#sent].index == 1)
 check('show carries only row display fields', sent[#sent].action == 'show' and sent[#sent].rows[1].onSelect == nil
-    and sent[#sent].rows[1].option == nil and sent[#sent].title == 'Fahrzeug')
-check('show carries the icon of the target', sent[#sent].icon == 'fa-solid fa-car')
+    and sent[#sent].rows[1].option == nil)
+check('a new target places the surface', places == 1)
 local count = #sent
 S.update(two); check('nothing new means no message', #sent == count)
+check('the same target keeps its place', places == 1)
 S.wheel(1); S.wheel(1); check('the wheel wraps around', sent[#sent].action == 'select' and sent[#sent].index == 1)
 S.wheel(1); S.update(reversed)
 check('the selection follows its option', sent[#sent].index == 1)
@@ -87,28 +96,30 @@ S.begin()
 local confirmed = confirms()
 local sub = target({ { name = 'sub', label = 'Sub', openMenu = 'm' }, { name = 'in', label = 'In', menuName = 'm', onSelect = run } })
 S.update(sub); S.click()
-check('a submenu keeps the session open', S.isActive() and sent[#sent].action == 'show' and #sent[#sent].path == 1)
+check('a submenu keeps the session open', S.isActive() and sent[#sent].action == 'show' and S.menu() == 'm')
 check('opening a submenu confirms nothing', confirms() == confirmed)
 S.stop('test')
 S.begin(); S.update(sub)
-check('stop resets the menu', #sent[#sent].path == 0)
+check('stop resets the menu', S.menu() == nil and sent[#sent].rows[1].label == 'Sub')
 
 -- The menu belongs to what it was opened on
 local other = target({ { name = 'other', label = 'Other' } })
 other.entity = 6
 S.click()
-check('the submenu is open', #sent[#sent].path == 1)
+check('the submenu is open', S.menu() == 'm')
 S.update(other)
 check('another entity drops the submenu', sent[#sent].action == 'show' and sent[#sent].rows[1].label == 'Other' and #sent[#sent].rows == 1)
 S.update(sub)
-check('the first entity starts at home again', #sent[#sent].path == 0)
+check('the first entity starts at home again', S.menu() == nil)
 S.click()
+local placedBefore = places
 S.update(nil); S.update(sub)
-check('a target lost for a moment keeps the submenu', #sent[#sent].path == 1)
+check('a target lost for a moment keeps the submenu', S.menu() == 'm')
+check('a target found again is placed anew', places == placedBefore + 1)
 local onPoint = target({ { name = 'general', label = 'General' } })
 onPoint.point = { key = 'p1', entries = {}, distance = 1.0, entity = 5 }
 S.update(onPoint)
-check('another point drops the submenu', #sent[#sent].path == 0)
+check('another point drops the submenu', S.menu() == nil)
 S.stop('test')
 
 -- One option split over bones gives points with equal rows, a new snap still goes back to the top
@@ -152,7 +163,7 @@ count = #sent
 S.wheel(1)
 check('a menu result leaves the next session alone', S.isActive() and sent[#sent].action == 'select' and #sent == count + 1)
 S.update(two)
-check('the next session stays at home', sent[#sent].action == 'select' or #sent[#sent].path == 0)
+check('the next session stays at home', S.menu() == nil)
 S.stop('test')
 
 -- A failing option rolls its menu change back, that must not reach the session after it
@@ -165,7 +176,7 @@ ranAcross({ name = 'e', label = 'E', openMenu = 'm3', onSelect = function()
 end })
 _G.print = realPrint
 S.update(sub)
-check('a failing old click leaves the new submenu open', S.isActive() and sent[#sent].rows and #sent[#sent].path == 1)
+check('a failing old click leaves the new submenu open', S.isActive() and sent[#sent].rows and S.menu() == 'm')
 S.stop('test')
 
 -- Right click walks back the way the clicks came
@@ -180,24 +191,24 @@ S.begin(); S.update(deep)
 S.back()
 check('back at home does nothing', sent[#sent].action == 'show' and #sent[#sent].rows == 2)
 S.wheel(1); S.click()
-check('a push names the way and the direction', sent[#sent].nav == 'push' and sent[#sent].path[1] == 'Y' and sent[#sent].index == 1)
+check('a push names the direction and starts at the top', sent[#sent].nav == 'push' and S.menu() == 'first' and sent[#sent].index == 1)
 S.wheel(1); S.click()
-check('the path grows with the depth', sent[#sent].path[2] == 'F2' and sent[#sent].rows[1].label == 'S1')
+check('a second push goes one level deeper', S.menu() == 'second' and sent[#sent].rows[1].label == 'S1')
 S.back()
-check('back lands on the row it came from', sent[#sent].nav == 'pop' and sent[#sent].index == 2 and #sent[#sent].path == 1)
+check('back lands on the row it came from', sent[#sent].nav == 'pop' and sent[#sent].index == 2 and S.menu() == 'first')
 S.back()
-check('back reaches home on the row it came from', sent[#sent].index == 2 and #sent[#sent].path == 0 and sent[#sent].rows[1].label == 'X')
+check('back reaches home on the row it came from', sent[#sent].index == 2 and S.menu() == nil and sent[#sent].rows[1].label == 'X')
 S.click()
 local emptied = target({ { name = 'x', label = 'X', onSelect = run } })
 S.update(emptied)
-check('an emptied submenu falls back to home', sent[#sent].rows[1].label == 'X' and #sent[#sent].path == 0)
+check('an emptied submenu falls back to home', sent[#sent].rows[1].label == 'X' and S.menu() == nil)
 check('the direction is used once', sent[#sent].nav == nil)
 S.stop('test')
 
 local timed = target({ { name = 't', label = 'T', hold = 1200, onSelect = run }, B })
 S.begin(); S.update(timed)
 check('the selected row gives its hold time', S.holdTime() == 1200 and S.selected() == sent[#sent].rows[1].id)
-check('a held row is marked for the panel', sent[#sent].rows[1].hold == 'halten' and sent[#sent].rows[2].hold == nil)
+check('a held row carries no hint to the page', sent[#sent].rows[1].hold == nil)
 S.wheel(1)
 check('another row has no hold time and another id', S.holdTime() == nil and S.selected() == sent[#sent - 1].rows[2].id)
 S.stop('test')
@@ -211,6 +222,7 @@ check('disable blocks a start', S.begin() == false)
 S.disable(false); check('enabling allows a start again', S.begin() == true)
 S.stop('done')
 
-for _, name in ipairs({ 'Config', 'L', 'GetGameTimer', 'json', 'SendNuiMessage', 'DoesEntityExist', 'IsPauseMenuActive',
+for _, name in ipairs({ 'Config', 'L', 'GetGameTimer', 'json', 'SendDuiMessage', 'CreateDui', 'GetDuiHandle',
+    'CreateRuntimeTextureFromDuiHandle', 'GetCurrentResourceName', 'CreateRuntimeTxd', 'AddEventHandler', 'DoesEntityExist', 'IsPauseMenuActive',
     'IsNuiFocused', 'PlayerPedId', 'IsPedDeadOrDying' }) do _G[name] = nil end
 harness.resetEFT()

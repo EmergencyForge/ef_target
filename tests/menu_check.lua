@@ -28,25 +28,13 @@ local state = { history = {} }
 local onPoint = { point = point, entries = { general }, zones = { zone }, entity = 5, entityType = 2, coords = vec3(0, 0, 0), distance = 2.0 }
 local noPoint = { entries = { general }, zones = {}, entity = 5, entityType = 2, coords = vec3(0, 0, 0), distance = 2.0 }
 
-local rows, title = M.build(onPoint, state)
+local rows = M.build(onPoint, state)
 check('point options come first', rows[1].label == 'Tür öffnen')
 check('a point option out of range is dropped', #rows == 3)
 check('general options follow behind a divider', rows[2].label == 'Durchsuchen' and rows[2].divider and not rows[1].divider)
 check('zone rows come last with their own id', rows[3].id == 'z4:1' and rows[3].entry == zone and rows[1].id == '2:1')
-check('the title is the point label', title == 'Tür')
 check('without a point there is no divider', not M.build(noPoint, state)[1].divider)
-check('the title falls back to the entity type', select(2, M.build(noPoint, state)) == 'Fahrzeug')
-check('a zone only target is titled by the zone', select(2, M.build({ entries = {}, zones = { zone }, entity = 0, entityType = 0, coords = vec3(0, 0, 0), distance = 1 }, state)) == 'Zone')
-
-local function iconOf(t) return select(3, M.build(t, state)) end
-local zoneOnly = { entries = {}, zones = { zone }, entity = 0, entityType = 0, coords = vec3(0, 0, 0), distance = 1 }
-check('an entity brings the icon of its type', iconOf(noPoint) == 'fa-solid fa-car')
-check('a zone brings the zone icon', iconOf(zoneOnly) == 'fa-solid fa-location-dot')
-zone.icon = 'fa-solid fa-star'
-check('a zone can set its icon', iconOf(zoneOnly) == 'fa-solid fa-star')
-zone.icon = false
-check('a zone can turn its icon off', iconOf(zoneOnly) == nil)
-zone.icon = nil
+check('the menu has no heading any more', select('#', M.build(noPoint, state)) == 1)
 
 local inSub = { entries = { entry({ { label = 'Sub', menuName = 'sub' }, { label = 'Home' } }) }, zones = {}, entity = 5, entityType = 1, coords = vec3(0, 0, 0), distance = 1 }
 local subRows = M.build(inSub, { menu = 'sub', history = {} })

@@ -1,25 +1,15 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import TargetPanel, { type Row } from './TargetPanel.vue'
-import KeyPill from './KeyPill.vue'
+import TargetStack, { type Row } from './TargetStack.vue'
 
 const rows = ref<Row[]>([])
-const title = ref<string | undefined>()
-const icon = ref<string | undefined>()
 const index = ref(1)
-// The panel keeps its last rows while fading out, so hide only flips this flag
+// The stack keeps its last rows while fading out, so hide only flips this flag
 const shown = ref(false)
-const pillKey = ref('')
-const pillLabel = ref('')
-const pillShown = ref(false)
-const pillHold = ref<string | undefined>()
-const path = ref<string[]>([])
 const nav = ref<string | undefined>()
 const page = ref(0)
-const keyName = ref('E')
 const confirmed = ref(false)
 let confirmTimer: number | undefined
-const pill = ref<InstanceType<typeof KeyPill> | null>(null)
 
 function setAccent(hex: string) {
   if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) return
@@ -35,11 +25,11 @@ function setHold(ms: number) {
   root.classList.toggle('holding', ms > 0)
 }
 
-// Long enough for the panel to flash and fade out, see the delays on .confirmed
+// Long enough for the cap to press and flash, see the delays on .confirmed
 function confirm() {
   confirmed.value = true
   window.clearTimeout(confirmTimer)
-  confirmTimer = window.setTimeout(() => (confirmed.value = false), 300)
+  confirmTimer = window.setTimeout(() => (confirmed.value = false), 420)
 }
 
 function onMessage(e: MessageEvent) {
@@ -48,10 +38,7 @@ function onMessage(e: MessageEvent) {
   switch (d.action) {
     case 'show':
       rows.value = d.rows ?? []
-      title.value = d.title || undefined
-      icon.value = d.icon || undefined
       index.value = d.index ?? 1
-      path.value = d.path ?? []
       if (d.nav) {
         nav.value = d.nav
         page.value++
@@ -67,23 +54,8 @@ function onMessage(e: MessageEvent) {
     case 'hide':
       shown.value = false
       break
-    case 'pill':
-      pillKey.value = d.key ?? ''
-      pillLabel.value = d.label ?? ''
-      pillHold.value = d.hold
-      pillShown.value = true
-      break
-    case 'pillPos':
-      pill.value?.place(d.x, d.y)
-      break
-    case 'pillHide':
-      pillShown.value = false
-      break
     case 'hold':
       setHold(d.ms)
-      break
-    case 'key':
-      keyName.value = d.key ?? 'E'
       break
     case 'accent':
       setAccent(d.hex)
@@ -96,17 +68,5 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
 </script>
 
 <template>
-  <TargetPanel
-    :rows="rows"
-    :title="title"
-    :icon="icon"
-    :index="index"
-    :shown="shown"
-    :path="path"
-    :nav="nav"
-    :page="page"
-    :key-name="keyName"
-    :confirmed="confirmed"
-  />
-  <KeyPill ref="pill" :key-name="pillKey" :label="pillLabel" :shown="pillShown" :hold="pillHold" :confirmed="confirmed" />
+  <TargetStack :rows="rows" :index="index" :shown="shown" :nav="nav" :page="page" :confirmed="confirmed" />
 </template>

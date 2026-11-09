@@ -20,7 +20,7 @@ local doorId = exports.ef_target:AddPoint({
     },
 })
 
--- Point at world coordinates, always visible within 3 m. The nearest one shows a key pill, E runs the first option.
+-- Point at world coordinates, always visible within 3 m. The nearest one shows its first option, E runs it.
 exports.ef_target:AddPoint({
     coords = vec3(-265.0, -963.6, 31.2),
     show = 'near',

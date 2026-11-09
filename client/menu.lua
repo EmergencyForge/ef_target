@@ -2,10 +2,6 @@
 local Menu = {}
 EFT.Menu = Menu
 
-local titles = { [1] = 'Person', [2] = 'Fahrzeug', [3] = 'Objekt' }
-local icons = { [1] = 'fa-solid fa-user', [2] = 'fa-solid fa-car', [3] = 'fa-solid fa-cube' }
-local ZONE_ICON = 'fa-solid fa-location-dot'
-
 -- One context for showing and running a row, so a visible option cannot go stale on click
 function Menu.context(row, target)
     local point = row.point
@@ -20,21 +16,6 @@ end
 function Menu.holdTime(option)
     local hold = option.hold
     if type(hold) == 'number' and hold > 0 then return hold end
-end
-
--- Whoever sets the title can set the icon too, false shows none
-local function chosen(icon, fallback)
-    if icon == nil then return fallback end
-    return icon or nil
-end
-
-local function heading(target, rows)
-    local point, zone = target.point, target.zones[1]
-    if point and point.label then return point.label, chosen(point.icon, rows[1] and rows[1].icon) end
-    if target.entity and target.entity ~= 0 and titles[target.entityType] then
-        return L(titles[target.entityType]), icons[target.entityType]
-    end
-    if zone then return zone.label, chosen(zone.icon, ZONE_ICON) end
 end
 
 -- Point rows come first, then the general entries of the entity, then zones
@@ -71,7 +52,7 @@ function Menu.build(target, state)
 
     if pointRows > 0 and rows[pointRows + 1] then rows[pointRows + 1].divider = true end
 
-    return rows, heading(target, rows)
+    return rows
 end
 
 -- Equal while the NUI needs nothing new, so callbacks and distances never trigger a repaint

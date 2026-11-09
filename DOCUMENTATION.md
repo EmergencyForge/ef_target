@@ -18,13 +18,17 @@ Das Manifest enthält `provide 'ox_target'`, `provide 'qb-target'` und `provide 
 
 ## Bedienung
 
-Alt halten (`LMENU`, in den FiveM-Tastenbelegungen änderbar). In der Bildmitte dreht sich eine Raute aus vier Ecken ein, beim Loslassen dreht sie sich wieder heraus, Punkte in Reichweite erscheinen als kleine Rauten, nahe groß und deutlich, ferne kleiner und blasser. Trifft der Strahl eine Entity oder Zone, oder liegt ein Punkt nahe der Bildmitte, schließt und füllt sich die Raute in der Akzentfarbe aus ef_lib, und das Panel zeigt die Optionen.
+Alt halten (`LMENU`, in den FiveM-Tastenbelegungen änderbar). In der Bildmitte dreht sich eine Raute aus vier Ecken ein, beim Loslassen dreht sie sich wieder heraus, Punkte in Reichweite erscheinen als kleine Rauten, nahe groß und deutlich, ferne kleiner und blasser. Trifft der Strahl eine Entity oder Zone, oder liegt ein Punkt nahe der Bildmitte, schließt und füllt sich die Raute in der Akzentfarbe aus ef_lib, und neben dem Ziel erscheint das Menü.
+
+Das Menü ist ein Stapel aus Tastenkappen, eine Kappe je Option. Die gewählte Kappe ist weiß und trägt ihren Text, die anderen stehen kleiner und grau darüber und darunter, ab drei Schritten Abstand sind sie ausgeblendet. Beim Scrollen bleibt die gewählte Kappe an ihrem Platz neben dem Punkt, die Liste wandert unter ihr durch.
+
+Das Menü hängt als Fläche in der Welt und nicht im Bild. Zeigt die Fläche unter dem Fadenkreuz zum Spieler, etwa eine Wand, eine Tür oder die Seite eines Fahrzeugs, liegt das Menü flach darauf. Bei Böden, Tischplatten, Personen und Flächen, die zu schräg zum Spieler stehen, dreht es sich beim Öffnen einmal zum Spieler und bleibt dann stehen. An Fahrzeugen fährt und dreht es mit. Die Größe richtet sich beim Öffnen nach der Entfernung, damit der Text ungefähr gleich groß im Bild ankommt.
 
 - Mausrad wählt die Option, Linksklick oder E löst aus. Bei nur einer Option reicht der Klick.
-- Optionen mit `hold` zeigen "halten": Taste gedrückt lassen, die Zeile füllt sich. Loslassen oder eine andere Zeile wählen bricht ab.
+- Optionen mit `hold` lösen erst aus, wenn die Taste lang genug gedrückt bleibt. Solange füllt sich die Kappe von unten in der Akzentfarbe. Loslassen oder eine andere Option wählen bricht ab.
 - Rechtsklick geht im Untermenü eine Ebene zurück und landet auf der Zeile, von der es kam.
 - Alt loslassen bricht ab.
-- Es gibt keine Bedienung mit dem Mauszeiger. Kamera und Laufen bleiben frei, die NUI nimmt keinen Fokus.
+- Es gibt keine Bedienung mit dem Mauszeiger. Kamera und Laufen bleiben frei, das Menü nimmt keinen Fokus.
 - Solange Alt aktiv ist, sind Schießen, Zielen und Nahkampf gesperrt, das Mausrad schaltet keine Waffe um.
 - Alt endet von selbst bei Pausenmenü, Tod, NUI-Fokus (etwa ein offenes Menü einer anderen Resource), laufendem Fortschrittsbalken von ef_lib oder ox_lib und `DisableTargeting(true)`.
 
@@ -43,6 +47,7 @@ Config = {
         Thickness = 2.0,     -- Strichstärke der eigenen Raute in Pixeln bei 1080p, 1.0 bis 3.5
         CenterDot = false,   -- Punkt in der Mitte der eigenen Raute
     },
+    MenuScale = 1.0,         -- Größe des Menüs in der Welt, 1.0 ist eine Kappe von etwa 12 cm bei 2,5 m Abstand
     SnapRadius = 0.035,      -- Anteil der Bildhöhe, in dem die Raute auf einen Punkt springt
     MaxPoints = 24,          -- so viele Punkte werden gleichzeitig gezeichnet, die nächsten gewinnen
     DefaultPoints = true,    -- eingebaute Fahrzeugpunkte
@@ -85,17 +90,15 @@ exports.ef_target:IsActive()
 | `offset` | `vec3` in Metern von der Entity aus, statt `bone` |
 | `show` | `'alt'` (Standard) oder `'near'` |
 | `distance` | Reichweite, gilt für Optionen ohne eigenes `distance` |
-| `label` | Titel des Panels |
-| `icon` | Icon neben dem Titel, ohne Angabe das Icon der ersten Option, `false` zeigt keins |
 | `options` | Optionen |
 
-Genau eins von `global`, `model`, `entity`, `coords` ist nötig. Bei den drei ersten außerdem `bone` oder `offset`, sonst wirft der Aufruf einen Fehler.
+Genau eins von `global`, `model`, `entity`, `coords` ist nötig. Bei den drei ersten außerdem `bone` oder `offset`, sonst wirft der Aufruf einen Fehler. `label` und `icon` werden noch angenommen, das Menü hat aber keinen Kopf mehr, in dem sie stehen könnten.
 
 ### show
 
 `alt`: Der Punkt erscheint nur bei gehaltenem Alt.
 
-`near`: Der Punkt erscheint ohne Taste, sobald der Spieler in `distance` ist und mindestens eine Option erlaubt ist. Der nächste zeigt eine Tastenpille mit `E` und dem Text der ersten erlaubten Option, `E` führt sie aus. Hat der Punkt mehrere Optionen, wählt der Spieler sie bei gehaltenem Alt im Panel. Eine Option, die nur ein Untermenü öffnet, nimmt die Pille nicht. Öffnen alle Optionen eines `near`-Punkts nur ein Untermenü, bekommt er weder Marker noch Pille, außer bei gehaltenem Alt. Im Fahrzeug erscheinen `near`-Punkte nicht. Ohne `near`-Punkte läuft im Leerlauf nichts.
+`near`: Der Punkt erscheint ohne Taste, sobald der Spieler in `distance` ist und mindestens eine Option erlaubt ist. Am nächsten hängt ein Menü mit einer einzigen Kappe, der ersten erlaubten Option, `E` führt sie aus. Hat der Punkt mehrere Optionen, wählt der Spieler sie bei gehaltenem Alt. Eine Option, die nur ein Untermenü öffnet, kommt dafür nicht in Frage. Öffnen alle Optionen eines `near`-Punkts nur ein Untermenü, bekommt er weder Marker noch Menü, außer bei gehaltenem Alt. Im Fahrzeug erscheinen `near`-Punkte nicht. Ohne `near`-Punkte läuft im Leerlauf nichts.
 
 ### Zonen
 
@@ -105,7 +108,7 @@ exports.ef_target:AddSphereZone({ coords = vec3(..), radius = 2.0, options = {} 
 exports.ef_target:AddPolyZone({ points = { vec3(..), vec3(..), vec3(..) }, thickness = 4.0, options = {} })
 ```
 
-`size` ist die volle Ausdehnung je Achse, `rotation` dreht die Box um Z. Bei Polyzonen gilt die Höhe der Punkte im Mittel, `thickness` ist die Gesamthöhe. Weitere Felder: `name` (für `Remove` und gleiche Namen in mehreren Zonen), `label` (Titel des Panels), `icon` (ohne Angabe ein Ortssymbol, `false` zeigt keins), `drawSprite`. Ein `Remove` mit dem Namen entfernt alle Zonen dieses Namens.
+`size` ist die volle Ausdehnung je Achse, `rotation` dreht die Box um Z. Bei Polyzonen gilt die Höhe der Punkte im Mittel, `thickness` ist die Gesamthöhe. Weitere Felder: `name` (für `Remove` und gleiche Namen in mehreren Zonen), `drawSprite`. `label` und `icon` werden angenommen und nicht angezeigt. Ein `Remove` mit dem Namen entfernt alle Zonen dieses Namens.
 
 ### Felder einer Option
 
@@ -131,7 +134,7 @@ Als Ziel genau eins aus `onSelect`, `export`, `event`, `serverEvent`, `command`.
 
 `canInteract` läuft für das aktuelle Ziel höchstens alle 250 ms je Option. Für `groups` und `items` erkennt ef_target ESX, QBCore, Qbox oder ox_core und ox_inventory. Ohne Framework gelten sie als erfüllt, wie bei ox_target.
 
-Untermenü, Beispiel in `example.lua`: Eine Option mit `openMenu = 'ausweis'` öffnet das Menü, die Optionen mit `menuName = 'ausweis'` stehen darin. Der Pfad steht oben im Panel, Rechtsklick geht zurück.
+Untermenü, Beispiel in `example.lua`: Eine Option mit `openMenu = 'ausweis'` öffnet das Menü, die Optionen mit `menuName = 'ausweis'` stehen darin. Das Untermenü schiebt sich von rechts herein, Rechtsklick geht zurück.
 
 ## Umstieg von ox_target
 
@@ -184,7 +187,7 @@ Anders als in qb-target:
 lua tests/run.lua
 ```
 
-Die Tests laufen mit reinem Lua außerhalb von FiveM. Das Panel wird in `web/` mit `bun run build` gebaut, `web/preview.html` zeigt Panel und Pille im Browser.
+Die Tests laufen mit reinem Lua außerhalb von FiveM. Das Menü wird in `web/` mit `bun run build` gebaut. `bun x vite` und dann `/preview-3d.html` zeigt es in einem begehbaren Raum im Browser, mit denselben Maßen und derselben Ausrichtung wie im Spiel.
 
 Zum Ausprobieren im Spiel liegt in `examples/ef_target_test` eine eigene Ressource mit 16 Stationen auf dem Flugfeld von Sandy Shores: jede Art von Punkt und Zone, Untermenü, Halten, Rechte und die Kompatibilität zu ox_target und qb-target. Den Ordner in `resources` kopieren, `ensure ef_target_test` starten, `/eftest` teleportiert hin und zurück. Sie ist für Testserver gedacht, die Optionen am Getränkeautomaten gelten für jeden Automaten auf der Karte.
 

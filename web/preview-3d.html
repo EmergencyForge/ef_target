@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<title>EF Target 3D Vorschau</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0b0c; font: 12px 'Segoe UI', system-ui, sans-serif; color: #eee; }
+  #view { position: absolute; inset: 0; overflow: hidden; cursor: crosshair; }
+  #world { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-style: preserve-3d; transform-origin: 0 0; }
+  #world div, #world iframe { position: absolute; transform-origin: 0 0; }
+  #world .face { backface-visibility: visible; }
+  .wall { background: linear-gradient(180deg, #2a0e0e 0%, #4a1818 55%, #3a1212 100%); box-shadow: inset 0 -14px 0 #1c0909; }
+  .wall.dim { filter: brightness(0.7); }
+  .floor { background: repeating-linear-gradient(90deg, #5a3a22 0 38px, #4b301c 38px 40px), #5a3a22; }
+  .floor::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 40%, rgba(255, 200, 120, 0.28), transparent 60%); }
+  .ceil { background: #2b201a; }
+  .door { background: linear-gradient(90deg, #e9e4dc, #d6d0c6); box-shadow: 0 0 0 6px #b9b2a6; }
+  .door::before { content: ''; position: absolute; left: 12px; right: 12px; top: 14px; height: 70px; background: #c9c2b6; }
+  .handle { background: #8a8278; border-radius: 3px; }
+  .window { background: linear-gradient(180deg, #ffe7b8, #f7c47a); box-shadow: 0 0 0 8px #d8c7a6, 0 0 60px 20px rgba(255, 210, 140, 0.35); }
+  .crate { background: linear-gradient(135deg, #8b6a3e, #6e5230); box-shadow: inset 0 0 0 4px #5a4226; }
+  .crate.top { filter: brightness(1.2); }
+  .poster { background: linear-gradient(160deg, #c0392b, #1d2b3a); box-shadow: 0 0 0 5px #111; }
+  #world iframe.panel { border: 0; background: transparent; pointer-events: none; }
+  .dot { z-index: 5; }
+  .dot { position: absolute; width: 9px; height: 9px; margin: -6px 0 0 -6px; border: 1.5px solid #fff; transform: rotate(45deg); pointer-events: none; transition: background 0.15s; }
+  .dot.aim { background: var(--accent, #f0500a); border-color: var(--accent, #f0500a); }
+  #bar { position: absolute; left: 12px; top: 12px; width: 300px; padding: 12px; border-radius: 10px; background: rgba(15, 15, 17, 0.92); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08); }
+  #bar h1 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+  .row button { flex: 1; padding: 6px 0; border: 0; border-radius: 6px; background: #26262a; color: #ddd; font: inherit; cursor: pointer; }
+  #desc { min-height: 48px; margin: 0 0 10px; color: #aaa; line-height: 1.45; }
+  label { display: flex; align-items: center; gap: 8px; margin: 6px 0; color: #aaa; }
+  label input { flex: 1; }
+  .row { display: flex; gap: 6px; margin-top: 8px; }
+  .hint { margin-top: 10px; color: #777; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div id="view"><div id="world"></div></div>
+<div id="bar">
+  <h1>Menü in der Welt</h1>
+  <p id="desc">Wie im Spiel: Das Menü liegt auf der Fläche des Ziels und dreht sich zum Spieler, wenn die Fläche zu schräg steht.</p>
+  <label>MenuScale <input id="size" type="range" min="0.5" max="2" step="0.05" value="1" /></label>
+  <div class="row">
+    <button id="presetDoor">Tür von der Seite</button><button id="presetCrate">Kiste</button>
+  </div>
+  <div class="hint">WASD laufen, Maus ziehen oder klicken zum Umschauen, Mausrad wählt, E führt aus, H hält eine Option, Esc gibt die Maus frei.</div>
+</div>
+
+<script>
+// Units: 1 m = 100 px, y points down, floor at y = 0, camera looks along -z at yaw 0
+// Same numbers as client/surface.lua and client/nui.lua
+var METRES_PER_PIXEL = 0.0023, REFERENCE = 250, MIN_SIZE = 0.6, MAX_SIZE = 1.6, GRAZING = 0.3
+var PAGE_W = 1024, PAGE_H = 512
+var TARGETS = [
+  { id: 'door', p: [-244, -100, -480], title: 'Haustür', icon: 'fa-solid fa-door-closed',
+    surface: function () { return { p: [-248, -100, -480], yaw: Math.PI / 2 } },
+    rows: [
+      { id: 'a', label: 'Tür öffnen', icon: 'fa-solid fa-door-open' },
+      { id: 'b', label: 'Abschließen', icon: 'fa-solid fa-lock' },
+      { id: 'c', label: 'Klopfen', icon: 'fa-solid fa-hand-fist' },
+      { id: 'd', label: 'Untersuchen', icon: 'fa-solid fa-magnifying-glass', divider: true }
+    ] },
+  { id: 'crate', p: [90, -78, -550], title: 'Kiste', icon: 'fa-solid fa-box',
+    // The face that looks most towards the camera, like a box would pick it in game
+    surface: function () {
+      var dx = cam.x - 90, dz = cam.z + 550
+      if (Math.abs(dx) > Math.abs(dz)) return { p: [90 + Math.sign(dx) * 37, -45, -550], yaw: Math.sign(dx) * Math.PI / 2 }
+      return { p: [90, -45, -550 + Math.sign(dz) * 37], yaw: dz > 0 ? 0 : Math.PI }
+    },
+    rows: [
+      { id: 'a', label: 'Durchsuchen', icon: 'fa-solid fa-box-open' },
+      { id: 'b', label: 'Aufheben', icon: 'fa-solid fa-hand' },
+      { id: 'c', label: 'Schieben', icon: 'fa-solid fa-arrows-up-down-left-right' },
+      { id: 'd', label: 'Aufbrechen', icon: 'fa-solid fa-hammer', iconColor: '#c0392b' },
+      { id: 'e', label: 'Markieren', icon: 'fa-solid fa-tag' },
+      { id: 'f', label: 'Fotografieren', icon: 'fa-solid fa-camera' },
+      { id: 'g', label: 'Melden', icon: 'fa-solid fa-flag' }
+    ] }
+]
+
+var view = document.getElementById('view')
+var world = document.getElementById('world')
+var cam = { x: 0, y: -165, z: 0, yaw: 0, pitch: 0 }
+var F = 600
+var menuScale = 1
+var aimed = null
+var index = 1
+var placed = null
+var cooldown = 0
+
+function face(cls, x, y, z, ry, rx, w, h) {
+  var el = document.createElement('div')
+  el.className = 'face ' + cls
+  el.style.width = w + 'px'
+  el.style.height = h + 'px'
+  el.style.transform = 'translate3d(' + x + 'px,' + y + 'px,' + z + 'px) rotateY(' + ry + 'deg) rotateX(' + rx + 'deg)'
+  world.appendChild(el)
+  return el
+}
+
+// Room: 5 m wide, 10 m deep, 2.8 m high
+face('floor', -250, 0, -900, 0, 90, 500, 1000)
+face('ceil', -250, -280, -900, 0, 90, 500, 1000)
+face('wall', -250, -280, 100, 90, 0, 1000, 280)
+face('wall dim', 250, -280, -900, -90, 0, 1000, 280)
+face('wall', -250, -280, -900, 0, 0, 500, 280)
+face('wall dim', 250, -280, 100, 180, 0, 500, 280)
+face('door', -249, -215, -395, 90, 0, 95, 215)
+face('handle', -246, -103, -470, 90, 0, 14, 5)
+face('window', -90, -220, -899, 0, 0, 180, 120)
+face('poster', -249, -200, -650, 90, 0, 90, 120)
+face('poster', 249, -210, -300, -90, 0, 110, 140)
+// Crate 70 cm, centre at (90, -35, -550)
+face('crate', 55, -70, -515, 0, 0, 70, 70)
+face('crate', 125, -70, -585, 180, 0, 70, 70)
+face('crate', 55, -70, -515, 90, 0, 70, 70)
+face('crate', 125, -70, -585, -90, 0, 70, 70)
+face('crate top', 55, -70, -585, 0, 90, 70, 70)
+
+var holder = document.createElement('div')
+holder.style.transformStyle = 'preserve-3d'
+world.appendChild(holder)
+
+// The real Vue panel, loaded through Vite. Its .tp sits 24 px right of the page centre, the centre is the anchor.
+function panelDoc() {
+  return '<!DOCTYPE html><html><head><link rel="stylesheet" href="/dev/kit.css"></head>' +
+    '<body style="background:transparent"><div id="app"></div>' +
+    '<script>window.GetParentResourceName=function(){return "ef_target"}<\/script>' +
+    '<script type="module" src="/src/main.ts"><\/script></body></html>'
+}
+var worldFrame = document.createElement('iframe')
+worldFrame.className = 'panel'
+worldFrame.style.cssText = 'width:' + PAGE_W + 'px;height:' + PAGE_H + 'px;left:' + -PAGE_W / 2 + 'px;top:' + -PAGE_H / 2 + 'px'
+holder.appendChild(worldFrame)
+// The first aim can land before Vue is mounted, so a late frame gets the open menu again
+;[worldFrame].forEach(function (f) {
+  f.onload = function () { if (aimed) f.contentWindow.postMessage({ action: 'show', rows: aimed.rows, index: index }, '*') }
+})
+worldFrame.srcdoc = panelDoc()
+
+function send(m) {
+  if (worldFrame.contentWindow) worldFrame.contentWindow.postMessage(m, '*')
+}
+
+var dots = TARGETS.map(function () {
+  var d = document.createElement('div')
+  d.className = 'dot'
+  view.appendChild(d)
+  return d
+})
+
+function project(p) {
+  var dx = p[0] - cam.x, dy = p[1] - cam.y, dz = p[2] - cam.z
+  var cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch)
+  var x1 = dx * cy + dz * sy, z1 = -dx * sy + dz * cy
+  var y2 = dy * cp - z1 * sp, z2 = dy * sp + z1 * cp
+  if (z2 > -10) return null
+  var k = F / -z2
+  return { x: view.clientWidth / 2 + x1 * k, y: view.clientHeight / 2 + y2 * k, dist: Math.sqrt(dx * dx + dy * dy + dz * dz) }
+}
+
+// Mirrors Surface.place: the target's surface when it faces the player well enough, else a turn to the player
+function place(t) {
+  var dx = cam.x - t.p[0], dz = cam.z - t.p[2]
+  var len = Math.hypot(dx, dz)
+  var yaw = Math.atan2(dx, dz), p = t.p
+  var surface = t.surface()
+  if (len > 0 && (Math.sin(surface.yaw) * dx + Math.cos(surface.yaw) * dz) / len >= GRAZING) { yaw = surface.yaw; p = surface.p }
+  var dist = Math.hypot(dx, cam.y - t.p[1], dz)
+  var k = Math.max(MIN_SIZE, Math.min(MAX_SIZE, dist / REFERENCE))
+  placed = { p: p, yaw: yaw, out: 4, scale: METRES_PER_PIXEL * 100 * k }
+}
+
+function open(t) {
+  aimed = t
+  index = 1
+  place(t)
+  send({ action: 'show', rows: t.rows, index: 1 })
+}
+
+function close() {
+  aimed = null
+  send({ action: 'hide' })
+}
+
+function pickTarget() {
+  var cx = view.clientWidth / 2, cy = view.clientHeight / 2, best = null, bestD = 90
+  TARGETS.forEach(function (t, i) {
+    var s = project(t.p)
+    var d = dots[i]
+    if (!s || s.dist > 900) { d.style.display = 'none'; return }
+    var k = Math.max(0.55, Math.min(1, 1.15 - s.dist / 700))
+    d.style.display = ''
+    d.style.left = s.x + 'px'
+    d.style.top = s.y + 'px'
+    d.style.opacity = k
+    d.style.transform = 'rotate(45deg) scale(' + k + ')'
+    var off = Math.hypot(s.x - cx, s.y - cy)
+    if (s.dist < 420 && off < bestD) { best = t; bestD = off }
+    t.screen = s
+  })
+  TARGETS.forEach(function (t, i) { dots[i].classList.toggle('aim', t === best) })
+  return best
+}
+
+function render() {
+  world.style.transform = 'translateZ(' + F + 'px) rotateX(' + cam.pitch + 'rad) rotateY(' + cam.yaw + 'rad) translate3d(' +
+    -cam.x + 'px,' + -cam.y + 'px,' + -cam.z + 'px)'
+  var t = pickTarget()
+  if (performance.now() > cooldown) {
+    if (t && t !== aimed) open(t)
+    else if (!t && aimed) close()
+  }
+  var inWorld = aimed && placed
+  holder.style.display = inWorld ? '' : 'none'
+  if (inWorld) {
+    var p = placed.p
+    holder.style.transform = 'translate3d(' + p[0] + 'px,' + p[1] + 'px,' + p[2] + 'px) rotateY(' + placed.yaw +
+      'rad) translateZ(' + placed.out + 'px) scale(' + placed.scale * menuScale + ')'
+  }
+}
+
+var keys = {}
+var last = performance.now()
+function tick(now) {
+  var dt = Math.min(0.05, (now - last) / 1000)
+  last = now
+  var f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), r = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0)
+  var speed = 220 * dt
+  cam.x += (Math.sin(cam.yaw) * f + Math.cos(cam.yaw) * r) * speed
+  cam.z += (-Math.cos(cam.yaw) * f + Math.sin(cam.yaw) * r) * speed
+  cam.x = Math.max(-225, Math.min(225, cam.x))
+  cam.z = Math.max(-875, Math.min(75, cam.z))
+  render()
+  requestAnimationFrame(tick)
+}
+
+function look(mx, my) {
+  cam.yaw += mx * 0.0035
+  cam.pitch = Math.max(-1.2, Math.min(1.2, cam.pitch - my * 0.0035))
+}
+
+function lookAt(x, y, z, p) {
+  cam.x = x; cam.y = -165; cam.z = z
+  var dx = p[0] - x, dy = p[1] - cam.y, dz = p[2] - z
+  cam.yaw = Math.atan2(dx, -dz)
+  cam.pitch = Math.atan2(-dy, Math.hypot(dx, dz))
+  close()
+}
+
+var dragging = false
+view.addEventListener('mousedown', function () { dragging = true; if (view.requestPointerLock) view.requestPointerLock() })
+window.addEventListener('mouseup', function () { dragging = false })
+window.addEventListener('mousemove', function (e) {
+  if (document.pointerLockElement === view || dragging) look(e.movementX, e.movementY)
+})
+view.addEventListener('wheel', function (e) {
+  e.preventDefault()
+  if (!aimed) return
+  var n = aimed.rows.length
+  index = ((index - 1 + (e.deltaY > 0 ? 1 : -1) + n) % n) + 1
+  send({ action: 'select', index: index })
+}, { passive: false })
+window.addEventListener('keydown', function (e) {
+  keys[e.code] = true
+  if (e.code === 'KeyE' && aimed) {
+    send({ action: 'confirm' })
+    send({ action: 'hide' })
+    aimed = null
+    cooldown = performance.now() + 700
+  }
+})
+window.addEventListener('keyup', function (e) {
+  keys[e.code] = false
+  if (e.code === 'KeyH') send({ action: 'hold', ms: 0 })
+})
+window.addEventListener('keydown', function (e) { if (e.code === 'KeyH' && !e.repeat && aimed) send({ action: 'hold', ms: 1200 }) })
+
+document.getElementById('size').oninput = function (e) { menuScale = +e.target.value }
+document.getElementById('presetDoor').onclick = function () { lookAt(-110, 0, -320, TARGETS[0].p) }
+document.getElementById('presetCrate').onclick = function () { lookAt(-20, 0, -380, TARGETS[1].p) }
+
+function fit() { F = view.clientHeight * 0.866; view.style.perspective = F + 'px' }
+window.addEventListener('resize', fit)
+fit()
+lookAt(-110, 0, -320, TARGETS[0].p)
+requestAnimationFrame(tick)
+</script>
+</body>
+</html>

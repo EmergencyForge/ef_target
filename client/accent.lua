@@ -23,7 +23,7 @@ function Accent.rgb()
     return r, g, b
 end
 
--- The panel and key pill are NUI and need the same colour the markers use
+-- The menu page needs the same colour the markers use
 function Accent.push()
     EFT.Nui.accent(current)
 end

@@ -6,7 +6,11 @@ harness.resetEFT()
 _G.Config = { MaxPoints = 24, Reticle = { Thickness = 2.0, CenterDot = true } }
 _G.json = { encode = function(t) return t end }
 local sent = {}
-natives.SendNuiMessage = function(msg) sent[#sent + 1] = msg end
+natives.SendDuiMessage = function(_, msg) sent[#sent + 1] = msg end
+natives.CreateDui = function() return 1 end
+natives.GetDuiHandle = function() return 'dui' end
+natives.CreateRuntimeTextureFromDuiHandle = function() return 1 end
+natives.GetCurrentResourceName = function() return 'ef_target' end
 local exported = '#336699'
 _G.exports = setmetatable({}, { __index = function()
     return { GetAccentColor = function() return exported end }
@@ -226,7 +230,8 @@ Render = fresh()
 Render.start(); Render.stop()
 check('a thin line leaves that pixel to the outline', shade('frame5', 0, -27) == 0)
 
-for _, name in ipairs({ 'Config', 'json', 'exports', 'SendNuiMessage', 'AddEventHandler', 'CreateRuntimeTxd',
+for _, name in ipairs({ 'Config', 'json', 'exports', 'SendDuiMessage', 'CreateDui', 'GetDuiHandle',
+    'CreateRuntimeTextureFromDuiHandle', 'GetCurrentResourceName', 'AddEventHandler', 'CreateRuntimeTxd',
     'CreateRuntimeTexture', 'SetRuntimeTexturePixel', 'CommitRuntimeTexture', 'GetAspectRatio', 'GetFrameTime', 'CreateThread', 'Wait', 'SetDrawOrigin',
     'ClearDrawOrigin', 'DrawSprite' }) do _G[name] = nil end
 harness.resetEFT()

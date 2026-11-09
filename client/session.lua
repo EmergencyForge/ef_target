@@ -7,7 +7,9 @@ local state = { menu = nil, history = {} }
 local target, rows, signature, index, shown
 -- What the open menu belongs to. Survives hide: a target lost for one scan is not a new target.
 local focus
--- The submenus on the way to the open one: their label and the row each was opened from
+-- What the surface was placed for. Unlike focus it goes with hide, a target found again is placed anew.
+local placedFor
+-- The submenus on the way to the open one: the row each was opened from
 local trail = {}
 -- Set until the next show: which way the panel slides and the row to come back to
 local nav, restore
@@ -20,7 +22,7 @@ local inProgress, nextProgress = false, 0
 
 local function hide()
     if shown then EFT.Nui.hide() end
-    target, rows, signature, index, shown = nil, {}, nil, 1, false
+    target, rows, signature, index, shown, placedFor = nil, {}, nil, 1, false, nil
 end
 
 local function rowKey(row)
@@ -35,12 +37,6 @@ local function focusOf(t)
     if t.point then return t.point.key end
     if t.entity and t.entity ~= 0 then return t.entity end
     return t.zones[1] and 'z' .. t.zones[1].id
-end
-
-local function labels()
-    local out = {}
-    for i, step in ipairs(trail) do out[i] = step.label end
-    return out
 end
 
 function Session.isActive() return active end
@@ -96,7 +92,7 @@ function Session.stop(reason)
     trail, nav, restore = {}, nil, nil
     EFT.Filter.reset()
     EFT.Nui.hide()
-    target, rows, signature, index, shown = nil, {}, nil, 1, false
+    target, rows, signature, index, shown, placedFor = nil, {}, nil, 1, false, nil
 end
 
 function Session.disable(value)
@@ -116,18 +112,21 @@ function Session.update(newTarget)
         state.menu, state.history, trail = nil, {}, {}
     end
 
-    local newRows, title, icon = EFT.Menu.build(newTarget, state)
+    local newRows = EFT.Menu.build(newTarget, state)
     -- An emptied submenu has no row left to back out with
     if #newRows == 0 and state.menu then
         state.menu, state.history, trail = nil, {}, {}
-        newRows, title, icon = EFT.Menu.build(newTarget, state)
+        newRows = EFT.Menu.build(newTarget, state)
     end
     if #newRows == 0 then return hide() end
     local snapped = pointKey(newTarget) and pointKey(target) ~= pointKey(newTarget)
     target = newTarget
+    if newFocus ~= placedFor then
+        placedFor = newFocus
+        EFT.Surface.place(newTarget.anchor, newTarget.normal, newTarget.holder)
+    end
 
-    -- Title and icon are part of the key: a point can rename the panel without changing a single row
-    local sig = EFT.Menu.signature(newRows) .. '\29' .. (title or '') .. '\29' .. (icon or '')
+    local sig = EFT.Menu.signature(newRows)
     if sig == signature then
         rows = newRows
         -- Split bones of one option give equal rows, the new point still starts at the top
@@ -149,7 +148,7 @@ function Session.update(newTarget)
         end
     end
     rows, signature, index, shown = newRows, sig, newIndex, true
-    EFT.Nui.show(rows, title, index, labels(), nav, icon)
+    EFT.Nui.show(rows, index, nav)
     nav, restore = nil, nil
 end
 
@@ -177,7 +176,7 @@ function Session.click()
     if result == 'closed' then
         Session.stop('select')
     elseif result == 'menu' then
-        trail[#trail + 1] = { label = row.label, index = from }
+        trail[#trail + 1] = { index = from }
         -- A new menu starts at its first row, so the old selection must not carry over
         signature, index, nav = nil, 1, 'push'
         rows = {}

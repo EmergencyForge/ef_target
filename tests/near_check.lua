@@ -14,7 +14,7 @@ end
 
 harness.resetEFT()
 _G.Config = { Key = 'LMENU', UseKey = 'E', Toggle = false, SnapRadius = 0.035, MaxPoints = 24, DefaultPoints = true,
-    DefaultDistance = 7.0, RayLength = 20.0, Locale = 'de', Reticle = { Thickness = 2.0, CenterDot = true } }
+    DefaultDistance = 7.0, RayLength = 20.0, Locale = 'de', MenuScale = 1.0, Reticle = { Thickness = 2.0, CenterDot = true } }
 _G.L = function(text) return text end
 _G.json = { encode = function(t) return t end }
 
@@ -37,6 +37,7 @@ local function poolCalls(name, fn)
 end
 
 local clock, sent, commands, mappings, netEvents, serverEvents = 1000, {}, {}, {}, {}, {}
+local polys = 0
 local threads = {}
 local function pump(times)
     for _ = 1, times or 1 do
@@ -79,7 +80,6 @@ for name, offset in pairs(bones) do
 end
 
 local justPressed, heldDown, disabled, fired, typeCalls = {}, {}, {}, 0, {}
-local instructional, buttonArgs = 't_E', nil
 local inVehicle, paused, doorValid, lockStatus, doorDamaged, doorAngle = 0, false, true, 1, false, 0.0
 local doorCalls, owner, networked = {}, 1, true
 local onScreen, screenShift = true, 0
@@ -89,7 +89,14 @@ stub({
     CreateThread = function(fn) threads[#threads + 1] = coroutine.create(fn) end,
     Wait = function() coroutine.yield() end,
     GetGameTimer = function() return clock end,
-    SendNuiMessage = function(message) sent[#sent + 1] = message end,
+    SendDuiMessage = function(_, message) sent[#sent + 1] = message end,
+    CreateDui = function() return 1 end,
+    GetDuiHandle = function() return 'dui' end,
+    CreateRuntimeTextureFromDuiHandle = function() return 1 end,
+    DestroyDui = function() end,
+    GetFinalRenderedCamCoord = function() return camera end,
+    GetOffsetFromEntityGivenWorldCoords = function(entity, x, y, z) return vec3(x, y, z) - world[entity].coords end,
+    DrawSpritePoly = function() polys = polys + 1 end,
     RegisterCommand = function(name, fn) commands[name] = fn end,
     RegisterKeyMapping = function(name, label, device, key) mappings[name] = { label = label, device = device, key = key } end,
     RegisterNetEvent = function(name, fn) netEvents[name] = fn end,
@@ -156,10 +163,6 @@ stub({
     IsDisabledControlJustPressed = function(_, control) return justPressed[control] or false end,
     IsDisabledControlPressed = function(_, control) return heldDown[control] or false end,
     joaat = function(name) return #name * 256 end,
-    GetControlInstructionalButton = function(pad, hash, flag)
-        buttonArgs = { pad, hash, flag }
-        return instructional
-    end,
 
     CreateRuntimeTxd = function() return 1 end,
     CreateRuntimeTexture = function() return 1 end,
@@ -183,11 +186,17 @@ harness.load('client/geometry.lua')
 harness.load('client/registry.lua')
 local groupAllowed = true
 EFT.Framework = { hasGroup = function() return groupAllowed end, hasItems = function() return true end }
-for _, file in ipairs({ 'filter', 'points', 'menu', 'select', 'nui', 'session', 'accent', 'spring', 'render', 'scan', 'near', 'input' }) do
+for _, file in ipairs({ 'filter', 'points', 'menu', 'select', 'nui', 'surface', 'session', 'accent', 'spring', 'render', 'scan', 'near', 'input' }) do
     harness.load('client/' .. file .. '.lua')
 end
 pump(1)
 local R, N, S, Session, Render = EFT.Registry, EFT.Near, EFT.Scan, EFT.Session, EFT.Render
+local placedAt, placedNormal, placedOn = nil, nil, nil
+local realPlace = EFT.Surface.place
+EFT.Surface.place = function(anchor, normal, entity)
+    placedAt, placedNormal, placedOn = anchor, normal, entity
+    return realPlace(anchor, normal, entity)
+end
 
 local aimed, aimHit, aimCalls, drawn, emptySends = nil, nil, 0, nil, 0
 local realAim, realPoints = Render.setAim, Render.setPoints
@@ -261,71 +270,41 @@ local allowed = false
 local guarded = { name = 'guarded', label = 'Geschützt', canInteract = function() return allowed end, onSelect = function() nearRuns = nearRuns + 10 end }
 local spot = R.add('point', 'coords', { guarded, { label = 'Offen', onSelect = function() nearRuns = nearRuns + 100 end } }, 'res',
     { show = 'near', anchor = { coords = vec3(0.1, 0, 0) } })
-check('the nearest point takes the pill', N.tick(origin, 4000).key == 'c:0.1,0,0')
+check('the nearest point takes the menu', N.tick(origin, 4000).key == 'c:0.1,0,0')
 check('the first allowed option speaks for the point', N.tick(origin, 4500).option.label == 'Offen')
 N.use()
 check('use runs the first allowed option', nearRuns == 100)
 
 local submenuFirst = R.add('point', 'coords', { { label = 'Menü', openMenu = 'm' }, { label = 'Direkt', onSelect = function() end } }, 'res',
     { show = 'near', anchor = { coords = vec3(0.05, 0, 0) } })
-check('the pill skips an option the use key cannot do', N.tick(origin, 4600).option.label == 'Direkt')
+check('the near menu skips an option the use key cannot do', N.tick(origin, 4600).option.label == 'Direkt')
 R.remove(submenuFirst)
 
 threads = {}
 sent = {}
 N.sync()
 check('near points are drawn without the key', drawn and #drawn == 2 and Render.isRunning())
+check('the nearest point shows its option as a one row menu',
+    last('show') and #last('show').rows == 1 and last('show').rows[1].label == 'Offen' and last('show').index == 1)
+check('the near menu hangs at the point and turns to the player', placedAt == vec3(0.1, 0, 0) and placedNormal == nil)
+local shows, hides = count('show'), count('hide')
+N.sync()
+check('a resting near menu sends nothing', count('show') == shows)
 pump(1)
-check('the pill shows the option text', last('pill') and last('pill').label == 'Offen' and last('pill').key == 'E')
-check('the pill follows the point in screen fractions', last('pillPos') and last('pillPos').x == 0.51 and last('pillPos').y == 0.5)
-local position, pills = count('pillPos'), count('pill')
-pump(1)
-check('a resting pill sends nothing', count('pillPos') == position and count('pill') == pills)
-screenShift = 0.001
-pump(1)
-check('a moved pill sends its position, the text stays', count('pillPos') == position + 1 and count('pill') == pills)
-screenShift = 0
-onScreen = false
-pump(1)
-check('an off screen point hides the pill', count('pillHide') == 1)
-onScreen = true
-pump(1)
-check('the pill comes back on screen', count('pill') == pills + 1)
+check('a shown menu is drawn into the world as two triangles', polys == 2)
 commands['+ef_target']()
-check('a session takes the pill over', count('pillHide') == 2 and Session.isActive())
+check('a session takes the menu over', count('hide') == hides + 1 and Session.isActive())
 commands['-ef_target']()
 pump(2)
 check('near markers come back when the session ends', Render.isRunning() and #drawn == 2)
-pump(1)
-check('the pill comes back when the session ends', count('pill') == pills + 2)
+check('the near menu comes back when the session ends', count('show') == shows + 1)
 R.remove(spot); R.remove(nearId); R.remove(altFirst)
+local hidesBefore = count('hide')
 N.sync()
-check('no near point left hides the pill', count('pillHide') == 3)
+check('no near point left hides the menu', count('hide') == hidesBefore + 1)
 check('no near point left stops the markers', not Render.isRunning())
 pump(2)
 threads = {}
-
--- The pill names the key the player really bound
-local function pillKeyFor(label)
-    instructional = label
-    local id = R.add('point', 'coords', { label = 'Drücken' }, 'res', { show = 'near', anchor = { coords = vec3(0.1, 0, 0) } })
-    N.sync()
-    pump(1)
-    local key = last('pill').key
-    R.remove(id)
-    N.sync()
-    pump(2)
-    threads = {}
-    return key
-end
-check('the pill reads the rebound key', pillKeyFor('t_G') == 'G')
-check('the lookup uses the mapped command', mappings['+ef_target_use'] and buttonArgs and buttonArgs[1] == 0
-    and buttonArgs[2] == (joaat('+ef_target_use') | 0x80000000) and buttonArgs[3] == true)
-check('a key without text shows its name', pillKeyFor('b_2000') == 'Leer' and pillKeyFor('b_1000') == 'Shift')
-check('function keys and mouse buttons are named', pillKeyFor('b_174') == 'F5' and pillKeyFor('b_103') == 'M4')
-check('an unknown button does not claim the config key', pillKeyFor('b_9999') == '?')
-check('no answer falls back to the config key', pillKeyFor(nil) == 'E')
-instructional = 't_E'
 
 -- Classify
 check('the own vehicle is no target', (function()
@@ -422,7 +401,8 @@ check('points live in the panel only when snapped', last('show').rows[1].label =
 world[vehicle].coords = vec3(0.1, 0, 0)
 scans(1)
 check('the aim snaps to the point', aimed and aimed.key == vehicle .. ':b:door_dside_f' and aimHit == true)
-check('the point leads the panel', last('show').rows[1].label == 'Tür' and last('show').title == 'Fahrertür')
+check('the point leads the menu', last('show').rows[1].label == 'Tür')
+check('the menu hangs at the snapped point and moves with its vehicle', placedAt == aimed.coords and placedOn == vehicle)
 check('general options stay below a divider', last('show').rows[#last('show').rows].label == 'Durchsuchen' and last('show').rows[#last('show').rows].divider)
 check('the points list holds the snapped point', S.current().point.key == aimed.key)
 
@@ -467,7 +447,7 @@ R.remove(fresh)
 scans(2)
 
 scans(1)
-local hidesBefore = count('pillHide')
+local showsBefore = count('show')
 justPressed[24] = true
 pump(1)
 justPressed[24] = false
@@ -476,7 +456,7 @@ check('a click runs the selected option', doorRun == 1)
 check('a finished option ends the session', not Session.isActive())
 pump(2)
 check('the end clears the aim', aimed == nil and not Render.isRunning())
-check('the end has no pill left to hide', count('pillHide') == hidesBefore)
+check('the end brings no near menu back', count('show') == showsBefore)
 check('the scan forgets its target', S.current() == nil)
 check('the threads wind down', #threads == 0)
 check('the key stays held without a restart', not Session.isActive())
@@ -852,8 +832,7 @@ local quick = R.add('global', 'vehicle', { name = 'quick', label = 'Schnell' }, 
 sent = {}
 press()
 scans(2)
-check('a session names the use key', last('key') and last('key').key == 'E')
-check('the panel marks the held row', last('show').rows[1].hold == 'halten')
+check('a held row shows no hint, the cap fills on the press', last('show').rows[1].hold == nil)
 
 justPressed[24], heldDown[24] = true, true
 pump(2)

@@ -15,8 +15,6 @@ provide 'ox_target'
 provide 'qb-target'
 provide 'qtarget'
 
-ui_page 'web/dist/index.html'
-
 shared_scripts {
     'config.lua',
     'shared/locale.lua'
@@ -35,6 +33,7 @@ client_scripts {
     'client/menu.lua',
     'client/select.lua',
     'client/nui.lua',
+    'client/surface.lua',
     'client/session.lua',
     'client/accent.lua',
     'client/spring.lua',

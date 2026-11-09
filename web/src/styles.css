@@ -1,12 +1,6 @@
 @font-face { font-family: 'Geist'; src: url('nui://ef_lib/web/dist/assets/geist-500.woff2') format('woff2'); font-weight: 500; }
 @font-face { font-family: 'Geist'; src: url('nui://ef_lib/web/dist/assets/geist-600.woff2') format('woff2'); font-weight: 600; }
 
-/* 96 %: the kit's 82 % surface turns brown over a red vehicle */
-:root {
-  --panel: rgba(20, 20, 22, 0.96);
-  --panel-line: rgba(255, 255, 255, 0.1);
-}
-
 html, body {
   margin: 0;
   height: 100%;
@@ -16,234 +10,144 @@ html, body {
   user-select: none;
 }
 
-.tp {
-  --row: 30px;
+/* Keycap stack: one cap per option, only the selected one carries its label.
+   The page centre is the anchor point, the selected cap always sits right beside it.
+   Everything that moves animates transform or opacity only, so no frame of a motion has to lay out or repaint the page. */
+.ts {
+  --out: cubic-bezier(0.22, 1, 0.36, 1);
+  --pop: cubic-bezier(0.34, 1.45, 0.64, 1);
   position: fixed;
-  left: calc(50% + 24px);
-  top: calc(50% - 16px);
-  width: 240px;
-  padding: 5px;
-  box-sizing: border-box;
-  border-radius: 10px;
-  background: var(--panel);
-  box-shadow: 0 0 0 1px var(--panel-line), 0 12px 32px rgba(0, 0, 0, 0.4);
+  left: calc(50% + 22px);
+  top: calc(50% - var(--cap) / 2);
   opacity: 0;
   visibility: hidden;
-  transform: translateX(-10px) scale(0.96);
-  transform-origin: 0 16px;
+  transform: translateX(-8px);
   pointer-events: none;
-  transition: opacity 110ms var(--ease), transform 110ms var(--ease), visibility 0s linear 110ms;
+  transition: opacity 180ms ease-out, transform 220ms var(--out), visibility 0s linear 220ms;
 }
-.tp.show {
+.ts.show {
   opacity: 1;
   visibility: visible;
   transform: none;
-  transition: opacity 150ms var(--ease), transform 240ms cubic-bezier(0.22, 1.25, 0.36, 1), visibility 0s;
+  transition: opacity 200ms ease-out, transform 380ms var(--out), visibility 0s;
 }
+.ts.confirmed:not(.show) { transition-delay: 220ms, 220ms, 440ms; }
 
-.tp-title {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 5px 8px 6px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-3);
-}
-.tp-crumbs {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tp-title b { font-weight: 500; color: var(--text); }
-.tp-sep { padding: 0 4px; font-style: normal; opacity: 0.55; }
-.tp-icon { margin-right: 6px; font-size: 10.5px; }
-.tp-count {
-  flex: none;
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.8;
-}
+.ts-page { position: absolute; left: 0; top: 0; width: 640px; }
+.ts-list { position: relative; transition: transform 420ms var(--out); will-change: transform; }
 
-.tp-body { position: relative; }
-.tp-view {
-  position: relative;
-  overflow: hidden;
-  transition: height 240ms var(--ease);
-}
-
-/* 8.5 rows: the cut-off half row tells the player the list scrolls.
-   Absolute, so the old and the new level can pass each other. */
-.tp-list {
+.ts-item {
   position: absolute;
   left: 0;
-  right: 0;
-  top: 0;
-  max-height: calc(var(--row) * 8.5);
-  overflow: hidden;
-  scroll-behavior: smooth;
-}
-/* The fade replaces the hard cut and shrinks to nothing at the ends of the list, CEF 103 needs the prefix */
-.tp-list.scrolls {
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--fade-top, 0px), #000 calc(100% - var(--fade-bottom, 0px)), transparent);
-}
-/* Sits in the padding of the panel, so it never touches the key on the row */
-.tp-rail {
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  right: -3.5px;
-  width: 2px;
-}
-.tp-thumb {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  border-radius: 1px;
-  background: rgba(255, 255, 255, 0.2);
-  transition: background 220ms var(--ease);
-}
-.tp-thumb.moving { background: rgba(255, 255, 255, 0.5); }
-
-.tp-push-enter-active, .tp-pop-enter-active { transition: transform 260ms var(--ease), opacity 260ms var(--ease); }
-.tp-push-leave-active, .tp-pop-leave-active { transition: transform 180ms ease-in, opacity 180ms ease-in; }
-.tp-push-enter-from { transform: translateX(44px); opacity: 0; }
-.tp-push-leave-to { transform: translateX(-30px); opacity: 0; }
-.tp-pop-enter-from { transform: translateX(-44px); opacity: 0; }
-.tp-pop-leave-to { transform: translateX(30px); opacity: 0; }
-
-.tp-row {
-  position: relative;
-  overflow: hidden;
   display: flex;
   align-items: center;
-  gap: 8px;
-  box-sizing: border-box;
-  height: var(--row);
-  padding: 0 calc(var(--key-w) + 14px) 0 8px;
-  border-radius: 6px;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--text-2);
-  transition: color 140ms var(--ease);
+  gap: 22px;
+  height: var(--cap);
+  transition: top 320ms var(--out), opacity 320ms ease-out;
 }
-/* Restarts on every open: the rows stay mounted, the class toggle starts the animation again */
-.tp.show .tp-row { animation: tp-row-in 220ms var(--ease) calc(40ms + var(--i) * 24ms) backwards; }
-.tp.show .tp-cursor { animation: tp-fade 200ms var(--ease) 60ms backwards; }
-.pill.show { animation: tp-fade 140ms var(--ease); }
-.tp-row.sel { color: #fff; }
-.tp-row > * { position: relative; }
-@keyframes tp-row-in {
-  from { opacity: 0; transform: translateX(-8px); }
+.ts-item[data-d='2'] { opacity: 0.6; }
+.ts-item[data-d='3'] { opacity: 0; }
+.ts.show .ts-item { animation: ts-in 420ms var(--out) calc(var(--i) * 40ms) backwards; }
+@keyframes ts-in {
+  from { opacity: 0; transform: translateX(-10px) scale(0.92); }
 }
-@keyframes tp-fade {
-  from { opacity: 0; }
-}
-
-/* The option has already run. The panel stays for the flash, then fades as usual. */
-.tp.confirmed:not(.show) {
-  transition: opacity 110ms var(--ease) 130ms, transform 110ms var(--ease) 130ms, visibility 0s linear 240ms;
-}
-.tp.confirmed .tp-cursor { animation: tp-confirm 260ms var(--ease); }
-.pill.confirmed { animation: tp-confirm 260ms var(--ease); }
-@keyframes tp-confirm {
-  from { background: rgba(var(--accent-rgb), 0.8); }
-}
-
-/* One element that travels, so the highlight, the key and the hold fill move as a unit */
-.tp-cursor {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: var(--row);
-  overflow: hidden;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.13);
-  transition: transform 170ms var(--ease);
-}
-.tp-cursor .fill { position: absolute; }
-.tp-cursor .kbd {
-  position: absolute;
-  right: 8px;
-  top: 5px;
-  transition: opacity 120ms var(--ease);
-}
-.tp-cursor .kbd.off { opacity: 0; }
-.tp-row.divider {
-  overflow: visible;
-  margin-top: 5px;
-}
-.tp-row.divider::before {
+.ts-item.divider::before {
   content: '';
   position: absolute;
   left: 8px;
-  right: 8px;
-  top: -3px;
-  height: 1px;
-  background: var(--line);
-}
-.tp-row i {
-  flex: none;
-  width: 14px;
-  text-align: center;
-  font-size: 12.5px;
-  opacity: 0.85;
-}
-.tp-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tp-row .tp-chev { position: absolute; right: 12px; width: 10px; font-size: 9px; opacity: 0.55; }
-.tp-row em, .pill em { font-size: 10.5px; font-style: normal; opacity: 0.72; }
-/* border-box: the kit's 20px minimum plus its padding made a single letter 30px wide */
-.tp-cursor .kbd, .pill .kbd {
-  flex: none;
-  box-sizing: border-box;
-  background: #3a3a40;
-  color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 -2px 0 rgba(0, 0, 0, 0.45);
+  width: calc(var(--cap) - 16px);
+  top: -14px;
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.35);
 }
 
-/* Runs on the selected row or the pill for as long as Lua holds the key, and snaps back on release */
-.fill {
+/* Gradients cannot be blended, so the white face and the accent flash are layers that fade in.
+   The lip under the face is what makes it read as a key. */
+.ts-cap {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--cap);
+  height: var(--cap);
+  overflow: hidden;
+  border-radius: 14px;
+  background: linear-gradient(#dedede, #c9c9c9);
+  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 4px 14px rgba(0, 0, 0, 0.35);
+  color: #333;
+  font-size: 21px;
+  opacity: 0.55;
+  transform: scale(0.84);
+  transition: transform 300ms var(--out), opacity 260ms ease-out, color 260ms ease-out;
+}
+.ts-cap::before, .ts-cap::after {
+  content: '';
+  position: absolute;
   inset: 0;
-  background: rgba(var(--accent-rgb), 0.62);
-  transform: scaleX(0);
-  transform-origin: 0 50%;
-  transition: transform 140ms ease-out;
+  opacity: 0;
 }
-.holding .tp-cursor .fill, .holding .pill .fill {
-  transform: scaleX(1);
-  transition: transform var(--hold-ms) linear;
+.ts-cap::before {
+  background: linear-gradient(#ffffff, #ececec);
+  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.14);
+  transition: opacity 260ms ease-out;
+}
+.ts-cap::after { background: rgb(var(--accent-rgb)); }
+.ts-cap i { position: relative; z-index: 2; margin-top: -4px; }
+.ts-item.sel .ts-cap {
+  opacity: 1;
+  transform: none;
+  color: #111;
+  transition: transform 420ms var(--pop), opacity 200ms ease-out, color 200ms ease-out;
+}
+.ts-item.sel .ts-cap::before { opacity: 1; }
+.ts.confirmed .ts-item.sel .ts-cap { animation: ts-press 360ms var(--out); }
+.ts.confirmed .ts-item.sel .ts-cap::after { animation: ts-flash 420ms ease-out; }
+@keyframes ts-press {
+  25% { transform: translateY(3px) scale(0.94); }
+}
+@keyframes ts-flash {
+  20% { opacity: 0.9; }
 }
 
-.pill {
-  position: fixed;
-  left: 0;
-  top: 0;
-  display: none;
-  align-items: center;
-  gap: 7px;
-  height: 30px;
-  padding: 0 11px 0 5px;
-  border-radius: 8px;
-  white-space: nowrap;
-  overflow: hidden;
-  background: var(--panel);
-  box-shadow: 0 0 0 1px var(--panel-line), 0 8px 24px rgba(0, 0, 0, 0.35);
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--text);
-  pointer-events: none;
-  will-change: transform;
+/* Rises from the bottom of the selected cap while Lua holds the key */
+.ts-fill {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: rgba(var(--accent-rgb), 0.85);
+  transform: scaleY(0);
+  transform-origin: 50% 100%;
+  transition: transform 220ms var(--out);
 }
-.pill.show { display: inline-flex; }
-.pill > * { position: relative; }
-.pill .fill { position: absolute; }
+.holding .ts-item.sel .ts-fill { transform: scaleY(1); transition: transform var(--hold-ms) linear; }
+
+/* Leaves fast and arrives a beat later, so two labels never stand on top of each other */
+.ts-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.65);
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 120ms ease-out, transform 160ms ease-out;
+}
+.ts-item.sel .ts-label {
+  opacity: 1;
+  transform: none;
+  transition: opacity 260ms ease-out 60ms, transform 380ms var(--out) 60ms;
+}
+.ts-chev { font-size: 16px; opacity: 0.7; }
+
+/* Opening a submenu slides the new level in from the right, going back from the left */
+.ts-push-enter-active, .ts-pop-enter-active { transition: transform 320ms var(--out), opacity 260ms ease-out; }
+.ts-push-leave-active, .ts-pop-leave-active { transition: transform 180ms ease-in, opacity 180ms ease-in; }
+.ts-push-enter-from { transform: translateX(44px); opacity: 0; }
+.ts-push-leave-to { transform: translateX(-30px); opacity: 0; }
+.ts-pop-enter-from { transform: translateX(-44px); opacity: 0; }
+.ts-pop-leave-to { transform: translateX(30px); opacity: 0; }

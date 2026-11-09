@@ -17,6 +17,8 @@ local SHAPE_FAILED, SHAPE_PENDING = 0, 1
 local SIGHT_TOLERANCE = 1.0
 -- Render reads a table without coords as "draw at the screen centre"
 local CENTRE_AIM = {}
+-- The surface under the crosshair only stands for a point it lies next to
+local NORMAL_REACH = 1.0
 
 -- Bumped on start and stop, a thread that sees another value is out of date
 local generation = 0
@@ -134,30 +136,30 @@ function Scan.collectPoints(entities, show, playerCoords)
     return out
 end
 
--- Returns hit, entity, coords, status
+-- Returns hit, entity, coords, status, surface normal
 local function probe(from, to, flags, ignore)
     local handle = StartShapeTestLosProbe(from.x, from.y, from.z, to.x, to.y, to.z, flags, ignore, IGNORE_NO_COLLISION)
     while true do
         Wait(0)
-        local status, hit, coords, _, _, entity = GetShapeTestResultIncludingMaterial(handle)
-        if status ~= SHAPE_PENDING then return hit == true or hit == 1, entity, coords, status end
+        local status, hit, coords, normal, _, entity = GetShapeTestResultIncludingMaterial(handle)
+        if status ~= SHAPE_PENDING then return hit == true or hit == 1, entity, coords, status, normal end
     end
 end
 
--- Returns the entity under the crosshair, nil if there is none, and the hit position, nil on a miss
+-- Returns the entity under the crosshair, nil if there is none, and the hit position and normal, nil on a miss
 local function cast(ped)
     local from, direction = GetWorldCoordFromScreenCoord(0.5, 0.5)
     local to = from + direction * Config.RayLength
-    local hit, entity, coords = probe(from, to, FLAGS_ALL, ped)
-    if hit and Scan.classify(entity) then return entity, coords end
-    if not hit then coords = nil end
+    local hit, entity, coords, _, normal = probe(from, to, FLAGS_ALL, ped)
+    if hit and Scan.classify(entity) then return entity, coords, normal end
+    if not hit then coords, normal = nil, nil end
 
-    local hit2, entity2, coords2 = probe(from, to, FLAGS_ENTITIES, ped)
-    if not hit2 or (coords and #(coords2 - from) >= #(coords - from)) then return nil, coords end
-    if not Scan.classify(entity2) then return nil, coords2 end
+    local hit2, entity2, coords2, _, normal2 = probe(from, to, FLAGS_ENTITIES, ped)
+    if not hit2 or (coords and #(coords2 - from) >= #(coords - from)) then return nil, coords, normal end
+    if not Scan.classify(entity2) then return nil, coords2, normal2 end
     -- This flag set can reach through walls
-    if HasEntityClearLosToEntity(entity2, ped, 7) then return entity2, coords2 end
-    return nil, coords
+    if HasEntityClearLosToEntity(entity2, ped, 7) then return entity2, coords2, normal2 end
+    return nil, coords, normal
 end
 
 local function anyStatic(options, distance, menu)
@@ -251,14 +253,19 @@ local function generalEntries(entity, entityType, model, netId, isPlayer)
     return out
 end
 
--- With a snap but no entity under the ray the point's entity stands in, so its general options stay reachable
-local function buildTarget(entity, coords, playerCoords, zones, point)
+-- With a snap but no entity under the ray the point's entity stands in, so its general options stay reachable.
+-- anchor is where the menu hangs, normal the surface it may lie on.
+local function buildTarget(entity, coords, normal, playerCoords, zones, point)
+    local hit = coords
     if point and not entity then
         entity, coords = point.entity, point.coords
     end
     if not entity and #zones == 0 and not point then return nil end
 
     local target = { zones = zones, point = point, entries = {}, coords = coords, distance = #(coords - playerCoords) }
+    target.anchor = point and point.coords or coords
+    target.holder = point and point.entity or entity
+    if hit and normal and #(hit - target.anchor) <= NORMAL_REACH then target.normal = normal end
     local entityType, model, netId, isPlayer = Scan.classify(entity)
     if entityType then
         target.entity, target.entityType, target.model, target.netId = entity, entityType, model, netId
@@ -296,7 +303,7 @@ local function step(mine)
     local Session = EFT.Session
     local ped = PlayerPedId()
     local playerCoords = GetEntityCoords(ped)
-    local entity, coords = cast(ped)
+    local entity, coords, normal = cast(ped)
     -- The rays take frames and setAim has no guard of its own, so nothing may be drawn for a finished session
     if mine ~= generation or not Session.isActive() then return end
 
@@ -306,7 +313,7 @@ local function step(mine)
     snappedKey = point and point.key
     if point and point.entity then point.coords = EFT.Points.resolve(point.entries[1], point.entity, point.model) or point.coords end
 
-    current = buildTarget(entity, coords, playerCoords, zonesAt(coords), point)
+    current = buildTarget(entity, coords, normal, playerCoords, zonesAt(coords), point)
     Session.update(current)
     if not Session.isActive() then return end
     EFT.Render.setPoints(drawn)

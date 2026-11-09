@@ -81,8 +81,6 @@ end
 
 local function start()
     if not EFT.Session.begin() then return end
-    -- Sent per session, the player can rebind the key at any time
-    EFT.Nui.key(EFT.Near.useKey())
     EFT.Render.start()
     EFT.Near.sync()
     EFT.Scan.start()

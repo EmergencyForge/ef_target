@@ -1,16 +1,15 @@
--- show='near' points: visible without a key, the nearest one offers its first option on the use key.
+-- show='near' points: visible without a key, the nearest one offers its first option on the use key
+-- and shows it as a one row menu.
 local Near = {}
 EFT.Near = Near
 
 local TICK_MS = 500
--- Below a pixel at 1080p. Every send is a JSON string and a message into the browser.
-local PILL_STEP = 0.0002
 
 -- Points in reach with an allowed option, and the nearest of them
 local nearby, nearest = {}, nil
--- Text on the pill, nil while the pill is hidden
-local pillLabel = nil
-local ticking, framing = false, false
+-- Point key and option the menu shows, nil while it is hidden
+local shown, shownOption = nil, nil
+local ticking = false
 
 -- The use key has no panel, so an option that only opens a submenu has nothing to run
 local function usable(option)
@@ -47,68 +46,23 @@ function Near.tick(playerCoords, now, fresh)
     return best
 end
 
-local function hidePill()
-    if pillLabel then
-        pillLabel = nil
-        EFT.Nui.pillHide()
+local function hideMenu()
+    if shown then
+        shown, shownOption = nil, nil
+        EFT.Nui.hide()
     end
 end
 
--- Keys without a printable name come back as button icons. Community table, not documented by cfx.re:
--- https://forum.cfx.re/t/help-how-to-get-the-current-keybind-of-a-registered-keymap/1847600/7
-local BUTTON_KEYS = {
-    [100] = 'M1', [101] = 'M2', [102] = 'M3', [115] = 'Rad auf', [116] = 'Rad ab',
-    [130] = 'Num-', [131] = 'Num+', [134] = 'Num*', [135] = 'Enter',
-    [194] = '↑', [195] = '↓', [196] = '←', [197] = '→', [198] = 'Entf', [199] = 'Esc', [200] = 'Einfg', [201] = 'Ende',
-    [210] = 'Entf', [211] = 'Einfg', [212] = 'Ende', [1000] = 'Shift', [1002] = 'Tab', [1003] = 'Enter',
-    [1004] = 'Back', [1008] = 'Pos1', [1009] = 'Bild auf', [1010] = 'Bild ab', [1012] = 'Caps', [1013] = 'Strg',
-    [1014] = 'Strg', [1015] = 'Alt', [1055] = 'Pos1', [1056] = 'Bild auf', [2000] = 'Leer',
-}
-
-local function buttonKey(code)
-    if code >= 103 and code <= 110 then return 'M' .. code - 99 end
-    if code >= 137 and code <= 145 then return 'Num' .. code - 136 end
-    if code >= 170 and code <= 193 then return 'F' .. code - 169 end
-    return BUTTON_KEYS[code] and L(BUTTON_KEYS[code]) or '?'
+-- The point gets its own menu only when it or its option changes, a moving vehicle is followed by Surface
+local function showMenu(point)
+    local option = point.option
+    if shown == point.key and shownOption == option then return end
+    shown, shownOption = point.key, option
+    EFT.Surface.place(point.coords, nil, point.entity)
+    EFT.Nui.show({ { id = 'near', label = option.label, icon = option.icon, iconColor = option.iconColor } }, 1)
 end
 
--- The player can rebind the key in the game settings, the config only holds its default
-function Near.useKey()
-    local button = GetControlInstructionalButton(0, joaat('+ef_target_use') | 0x80000000, true)
-    if not button then return Config.UseKey end
-    local code = button:match('^b_(%d+)$')
-    if code then return buttonKey(tonumber(code)) end
-    return button:match('^t_(.+)$') or Config.UseKey
-end
-
-local function pillFrames()
-    local sentX, sentY = -1.0, -1.0
-    while nearest do
-        local point = nearest
-        -- Written back so the marker of a moving vehicle stays under the pill
-        point.coords = EFT.Points.resolve(point.entries[1], point.entity, point.model) or point.coords
-        local c = point.coords
-        local onScreen, x, y = GetScreenCoordFromWorldCoord(c.x, c.y, c.z)
-        if onScreen then
-            if math.abs(x - sentX) > PILL_STEP or math.abs(y - sentY) > PILL_STEP then
-                sentX, sentY = x, y
-                EFT.Nui.pillPos(x, y)
-            end
-            local label = point.option.label or ''
-            if pillLabel ~= label then
-                pillLabel = label
-                EFT.Nui.pill(Near.useKey(), label, EFT.Menu.holdTime(point.option))
-            end
-        else
-            sentX = -1.0
-            hidePill()
-        end
-        Wait(0)
-    end
-    framing = false
-end
-
--- Runs the check now and applies it to the markers and the pill. A running session owns the renderer.
+-- Runs the check now and applies it to the markers and the menu. A running session owns the renderer.
 function Near.sync()
     nearest = Near.tick(GetEntityCoords(PlayerPedId()), GetGameTimer())
 
@@ -123,12 +77,7 @@ function Near.sync()
         end
     end
 
-    if not nearest then
-        hidePill()
-    elseif not framing then
-        framing = true
-        CreateThread(pillFrames)
-    end
+    if nearest then showMenu(nearest) else hideMenu() end
 end
 
 local function anyNearPoints()
