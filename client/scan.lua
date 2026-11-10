@@ -269,7 +269,7 @@ local function buildTarget(entity, coords, playerCoords, zones, point)
     local target = { zones = zones, point = point, entries = {}, coords = coords, distance = #(coords - playerCoords) }
     if point then
         target.anchor = point.coords
-        target.facing = EFT.Points.forward(point.entries[1], point.entity, point.model)
+        target.panel = EFT.Points.panel(point.entries[1], point.entity, point.model, point.coords)
     elseif not entity then
         target.anchor = zoneCentre(zones[1], playerCoords)
     end

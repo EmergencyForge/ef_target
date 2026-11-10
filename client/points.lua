@@ -54,15 +54,25 @@ function Points.resolve(entry, entity, model)
     return GetOffsetFromEntityInWorldCoords(entity, offset.x, offset.y, offset.z)
 end
 
--- Which way a bone point faces, as a forward vector: a door bone turns with the door, so the menu at an
--- opened door lines up with the door and not with the car. nil for offsets and coords, they go by the entity.
-function Points.forward(entry, entity, model)
+-- Door bones sit on the hinge, so the line from a door bone to its handle runs along the door, open or shut.
+-- The bone rotation natives do not show an opened door, these two positions do.
+local hinges = {}
+
+-- Returns the line along the panel a handle point sits on, nil for every other point
+function Points.panel(entry, entity, model, coords)
     local anchor = entry and entry.anchor
-    if not anchor or not anchor.bone or not entity then return nil end
-    local index = boneIndex(anchor, entity, model or GetEntityModel(entity))
+    local side = anchor and anchor.bone and anchor.bone:match('^handle_(.+)$')
+    if not side or not entity or not coords then return nil end
+    local hinge = hinges[side]
+    if not hinge then
+        hinge = { bone = 'door_' .. side }
+        hinges[side] = hinge
+    end
+    local index = boneIndex(hinge, entity, model or GetEntityModel(entity))
     if index == -1 then return nil end
-    local heading = math.rad(GetEntityBoneRotation(entity, index).z)
-    return vec3(-math.sin(heading), math.cos(heading), 0.0)
+    local line = coords - GetEntityBonePosition_2(entity, index)
+    if line.x * line.x + line.y * line.y < 0.01 then return nil end
+    return line
 end
 
 local function keyOf(anchor, entity)

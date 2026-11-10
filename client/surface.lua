@@ -61,9 +61,10 @@ local function scaleAt(camera, anchor)
 end
 
 -- anchor is a fixed point (a bone, an offset, a zone marker) or nil to hang on the middle of the entity's side.
--- forward overrides the entity's facing for a point on a part that turns on its own, like a door.
+-- panel is the line along a part that swings on its own, like a door: the menu lies on whichever face of it
+-- the player sees. Picking among the entity's sides would stand it across an opened door.
 -- A ped keeps the facing it got here: a ped turning away would take the text with it.
-function Surface.place(anchor, entity, forward)
+function Surface.place(anchor, entity, panel)
     local camera = GetFinalRenderedCamCoord()
     if not entity or entity == 0 or not DoesEntityExist(entity) then
         if not anchor then return end
@@ -74,7 +75,15 @@ function Surface.place(anchor, entity, forward)
     local offset, tip
     if anchor then
         offset = GetOffsetFromEntityGivenWorldCoords(entity, anchor.x, anchor.y, anchor.z)
-        local t = anchor + Surface.orient(anchor, camera, forward or GetEntityForwardVector(entity))
+        local face = panel and flat(panel)
+        if face then
+            face = vec3(face.y, -face.x, 0.0)
+            local toCamera = flat(camera - anchor)
+            if toCamera and face.x * toCamera.x + face.y * toCamera.y < 0 then face = face * -1.0 end
+        else
+            face = Surface.orient(anchor, camera, GetEntityForwardVector(entity))
+        end
+        local t = anchor + face
         tip = GetOffsetFromEntityGivenWorldCoords(entity, t.x, t.y, t.z)
     else
         local axis

@@ -11,12 +11,12 @@ local boneAt = vec3(1, 2, 3)
 local boneAsks, entityExists = 0, true
 stub('GetEntityBoneIndexByName', function(_, name)
     boneAsks = boneAsks + 1
-    return (name == 'missing' or name == 'handle') and -1 or 1
+    if name == 'door_dside_f' then return 2 end
+    return (name == 'missing' or name == 'handle' or name == 'door_gone') and -1 or 1
 end)
 stub('DoesEntityExist', function() return entityExists end)
-stub('GetEntityBonePosition_2', function() return boneAt end)
-local boneHeading = 90.0
-stub('GetEntityBoneRotation', function() return vec3(0, 0, boneHeading) end)
+local hingeAt = vec3(0, 3, 3)
+stub('GetEntityBonePosition_2', function(_, index) return index == 2 and hingeAt or boneAt end)
 stub('GetEntityModel', function() return 77 end)
 stub('GetModelDimensions', function() return vec3(-1, -2, 0), vec3(1, 2, 2) end)
 stub('GetOffsetFromEntityInWorldCoords', function(_, x, y, z) return vec3(x + 100, y, z) end)
@@ -39,11 +39,12 @@ local function entry(bone, option, source)
 end
 
 check('a missing bone gives no point', P.resolve({ anchor = { bone = 'missing' } }, 5) == nil)
-local doorFacing = P.forward({ anchor = { bone = 'door' } }, 5)
-check('a bone point faces the way its bone turns', math.abs(doorFacing.x + 1) < 0.001 and math.abs(doorFacing.y) < 0.001)
-check('offsets and coords go by their entity', P.forward({ anchor = { offset = vec3(0, 0, 0) } }, 5) == nil
-    and P.forward({ anchor = { coords = vec3(0, 0, 0) } }, nil) == nil)
-check('a missing bone gives no facing', P.forward({ anchor = { bone = 'missing' } }, 5) == nil)
+local line = P.panel({ anchor = { bone = 'handle_dside_f' } }, 5, nil, boneAt)
+check('a handle lies on the line from its door hinge', line and line.x == 1 and line.y == -1)
+check('other bones, offsets and coords have no panel', P.panel({ anchor = { bone = 'door' } }, 5, nil, boneAt) == nil
+    and P.panel({ anchor = { offset = vec3(0, 0, 0) } }, 5, nil, boneAt) == nil and P.panel({ anchor = { coords = boneAt } }, nil, nil, boneAt) == nil)
+check('a handle without its door bone has no panel', P.panel({ anchor = { bone = 'handle_gone' } }, 5, nil, boneAt) == nil)
+check('a handle that stands on its hinge has no panel', P.panel({ anchor = { bone = 'handle_dside_f' } }, 5, nil, hingeAt) == nil)
 check('a bone resolves to its position', P.resolve({ anchor = { bone = 'door' } }, 5) == boneAt)
 check('a relative offset scales by the model size',
     P.resolve({ anchor = { offset = vec3(0.5, 0.5, 0.5), relative = true } }, 5) == vec3(100, 0, 1))

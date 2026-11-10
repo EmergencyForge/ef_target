@@ -123,7 +123,7 @@ function Session.update(newTarget)
     target = newTarget
     if newFocus ~= placedFor then
         placedFor = newFocus
-        EFT.Surface.place(newTarget.anchor, newTarget.holder, newTarget.facing)
+        EFT.Surface.place(newTarget.anchor, newTarget.holder, newTarget.panel)
     end
 
     local sig = EFT.Menu.signature(newRows)
