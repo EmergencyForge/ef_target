@@ -1,6 +1,6 @@
--- Draws the menu page as an upright surface in the world, lined up with the object it belongs to:
--- on the surface under the crosshair when that faces the player well enough, otherwise on the side of
--- the entity that faces the player. Only without an entity, at a zone or a free point, it turns to the player.
+-- Draws the menu page as an upright surface in the world. Where it hangs and which way it faces come from
+-- the object alone, never from where the crosshair hit: on the middle of the entity's side that faces the
+-- player, or at a fixed point on that side. Only zones and free points, which have no entity, turn to the player.
 local Surface = {}
 EFT.Surface = Surface
 
@@ -9,12 +9,7 @@ local UP = vec3(0.0, 0.0, 1.0)
 -- so the text keeps roughly the same size on screen when it opens.
 local METRES_PER_PIXEL = 0.0018
 local REFERENCE, MIN_SIZE, MAX_SIZE = 2.5, 0.6, 1.6
--- Floors, tables and roofs would lay the text flat: steeper normals do not count as a surface
-local STEEP = 0.7
--- Below this the surface is seen so much from the side that the text would be unreadable
-local GRAZING = 0.3
--- Lifts the surface off what it lies on. Curved bodywork and the bulk of a ped need the room,
--- pulling towards the camera instead makes the menu slide over the object as the player moves.
+-- Lifts the surface off the side it hangs on: mirrors, handles and a ped's arms reach past the model box
 local LIFT = 0.10
 -- How long the page keeps being drawn after hide, long enough for its fade and the press of a confirm
 local FADE_MS = 450
@@ -29,24 +24,66 @@ local function flat(v)
 end
 
 -- face points from the surface towards the viewer, right is the viewer's right on it.
--- forward is the entity's forward vector: its four sides are the fallback when the surface does not carry the menu.
-function Surface.orient(anchor, normal, camera, forward)
+-- With the entity's forward vector the face is whichever of its four sides looks most at the camera.
+function Surface.orient(anchor, camera, forward)
     local toCamera = flat(camera - anchor) or vec3(0.0, -1.0, 0.0)
     local face = toCamera
-    local onSurface = normal and math.abs(normal.z) < STEEP and flat(normal)
-    if onSurface and onSurface.x * toCamera.x + onSurface.y * toCamera.y >= GRAZING then
-        face = onSurface
-    else
-        local f = forward and flat(forward)
-        if f then
-            local best = -2.0
-            for _, side in ipairs({ f, f * -1.0, vec3(-f.y, f.x, 0.0), vec3(f.y, -f.x, 0.0) }) do
-                local facing = side.x * toCamera.x + side.y * toCamera.y
-                if facing > best then best, face = facing, side end
-            end
+    local f = forward and flat(forward)
+    if f then
+        local best = -2.0
+        for _, side in ipairs({ f, f * -1.0, vec3(-f.y, f.x, 0.0), vec3(f.y, -f.x, 0.0) }) do
+            local facing = side.x * toCamera.x + side.y * toCamera.y
+            if facing > best then best, face = facing, side end
         end
     end
     return face, vec3(-face.y, face.x, 0.0)
+end
+
+-- The middle of the side of the model box that the camera looks at, and its outward axis, both in entity space.
+-- The side is the one the line from the box centre to the camera leaves through, so a long vehicle keeps
+-- showing its flank until the player stands nearly in front of it.
+function Surface.boxSide(entity, camera)
+    local min, max = GetModelDimensions(GetEntityModel(entity))
+    local centre = (min + max) * 0.5
+    local view = GetOffsetFromEntityGivenWorldCoords(entity, camera.x, camera.y, camera.z) - centre
+    local halfX = math.max((max.x - min.x) * 0.5, 0.01)
+    local halfY = math.max((max.y - min.y) * 0.5, 0.01)
+    if math.abs(view.x) / halfX >= math.abs(view.y) / halfY then
+        local sign = view.x >= 0 and 1.0 or -1.0
+        return centre + vec3(sign * halfX, 0.0, 0.0), vec3(sign, 0.0, 0.0)
+    end
+    local sign = view.y >= 0 and 1.0 or -1.0
+    return centre + vec3(0.0, sign * halfY, 0.0), vec3(0.0, sign, 0.0)
+end
+
+local function scaleAt(camera, anchor)
+    return math.max(MIN_SIZE, math.min(MAX_SIZE, #(camera - anchor) / REFERENCE))
+end
+
+-- anchor is a fixed point (a bone, an offset, a zone marker) or nil to hang on the middle of the entity's side.
+-- A ped keeps the facing it got here: a ped turning away would take the text with it.
+function Surface.place(anchor, entity)
+    local camera = GetFinalRenderedCamCoord()
+    if not entity or entity == 0 or not DoesEntityExist(entity) then
+        if not anchor then return end
+        placed = { anchor = anchor, face = Surface.orient(anchor, camera), scale = scaleAt(camera, anchor) }
+        return
+    end
+
+    local offset, tip
+    if anchor then
+        offset = GetOffsetFromEntityGivenWorldCoords(entity, anchor.x, anchor.y, anchor.z)
+        local t = anchor + Surface.orient(anchor, camera, GetEntityForwardVector(entity))
+        tip = GetOffsetFromEntityGivenWorldCoords(entity, t.x, t.y, t.z)
+    else
+        local axis
+        offset, axis = Surface.boxSide(entity, camera)
+        tip = offset + axis
+        anchor = GetOffsetFromEntityInWorldCoords(entity, offset.x, offset.y, offset.z)
+    end
+    local face = flat(GetOffsetFromEntityInWorldCoords(entity, tip.x, tip.y, tip.z) - anchor) or Surface.orient(anchor, camera)
+    placed = { anchor = anchor, face = face, scale = scaleAt(camera, anchor), entity = entity, offset = offset }
+    if GetEntityType(entity) ~= 1 then placed.tip = tip end
 end
 
 -- Corners counter-clockwise as seen from the front: the game culls the back of a sprite poly.
@@ -66,28 +103,7 @@ function Surface.quad(centre, face, right, scale)
     }
 end
 
--- A ped's body gives no usable surface, and a ped turning away would take the text with it:
--- it gets the side of its body that faces the player and keeps that facing.
-function Surface.place(anchor, normal, entity)
-    if not anchor then return end
-    local camera = GetFinalRenderedCamCoord()
-    local hasEntity = entity and entity ~= 0
-    local isPed = hasEntity and GetEntityType(entity) == 1
-    local face = Surface.orient(anchor, not isPed and normal or nil, camera, hasEntity and GetEntityForwardVector(entity) or nil)
-    local distance = #(camera - anchor)
-    local scale = math.max(MIN_SIZE, math.min(MAX_SIZE, distance / REFERENCE))
-    placed = { anchor = anchor, face = face, scale = scale }
-    if entity and entity ~= 0 then
-        placed.entity = entity
-        placed.offset = GetOffsetFromEntityGivenWorldCoords(entity, anchor.x, anchor.y, anchor.z)
-        if not isPed then
-            local tip = anchor + face
-            placed.tip = GetOffsetFromEntityGivenWorldCoords(entity, tip.x, tip.y, tip.z)
-        end
-    end
-end
-
--- Follows a moving entity, a vehicle also turns the surface with it
+-- Follows a moving entity, a vehicle or prop also turns the surface with it
 local function current()
     local p = placed
     if not p.entity or not DoesEntityExist(p.entity) then return p.anchor, p.face end

@@ -118,6 +118,7 @@ stub({
     end,
     GetEntityModel = function(entity) return world[entity].model end,
     GetEntityForwardVector = function() return vec3(0, 1, 0) end,
+    GetModelDimensions = function() return vec3(-1, -2, -1), vec3(1, 2, 1) end,
     IsModelAVehicle = function(model) return model == 77 end,
     IsPedAPlayer = function(entity) return world[entity].player or false end,
     NetworkGetEntityIsNetworked = function(entity) return networked and world[entity].netId ~= nil end,
@@ -192,11 +193,11 @@ for _, file in ipairs({ 'filter', 'points', 'menu', 'select', 'nui', 'surface', 
 end
 pump(1)
 local R, N, S, Session, Render = EFT.Registry, EFT.Near, EFT.Scan, EFT.Session, EFT.Render
-local placedAt, placedNormal, placedOn = nil, nil, nil
+local placedAt, placedOn = nil, nil
 local realPlace = EFT.Surface.place
-EFT.Surface.place = function(anchor, normal, entity)
-    placedAt, placedNormal, placedOn = anchor, normal, entity
-    return realPlace(anchor, normal, entity)
+EFT.Surface.place = function(anchor, entity)
+    placedAt, placedOn = anchor, entity
+    return realPlace(anchor, entity)
 end
 
 local aimed, aimHit, aimCalls, drawn, emptySends = nil, nil, 0, nil, 0
@@ -287,7 +288,7 @@ N.sync()
 check('near points are drawn without the key', drawn and #drawn == 2 and Render.isRunning())
 check('the nearest point shows its option as a one row menu',
     last('show') and #last('show').rows == 1 and last('show').rows[1].label == 'Offen' and last('show').index == 1)
-check('the near menu hangs at the point and turns to the player', placedAt == vec3(0.1, 0, 0) and placedNormal == nil)
+check('the near menu hangs at the point and turns to the player', placedAt == vec3(0.1, 0, 0))
 local shows, hides = count('show'), count('hide')
 N.sync()
 check('a resting near menu sends nothing', count('show') == shows)
@@ -346,6 +347,7 @@ check('a hit entity is the target', S.current() and S.current().entity == vehicl
 check('the panel shows', last('show') and last('show').rows[1].label == 'Durchsuchen')
 check('a hit fills the centre marker', aimed and aimed.coords == nil and aimHit == true)
 check('the target carries the hit distance', S.current().distance == 1)
+check('where the ray hit does not place the menu, the vehicle does', placedAt == nil and placedOn == vehicle)
 
 ray(511, 0, vec3(0, 3, 0))
 ray(26, stranger, vec3(0, 1, 0))
