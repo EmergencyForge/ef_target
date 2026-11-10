@@ -61,8 +61,9 @@ local function scaleAt(camera, anchor)
 end
 
 -- anchor is a fixed point (a bone, an offset, a zone marker) or nil to hang on the middle of the entity's side.
+-- forward overrides the entity's facing for a point on a part that turns on its own, like a door.
 -- A ped keeps the facing it got here: a ped turning away would take the text with it.
-function Surface.place(anchor, entity)
+function Surface.place(anchor, entity, forward)
     local camera = GetFinalRenderedCamCoord()
     if not entity or entity == 0 or not DoesEntityExist(entity) then
         if not anchor then return end
@@ -73,7 +74,7 @@ function Surface.place(anchor, entity)
     local offset, tip
     if anchor then
         offset = GetOffsetFromEntityGivenWorldCoords(entity, anchor.x, anchor.y, anchor.z)
-        local t = anchor + Surface.orient(anchor, camera, GetEntityForwardVector(entity))
+        local t = anchor + Surface.orient(anchor, camera, forward or GetEntityForwardVector(entity))
         tip = GetOffsetFromEntityGivenWorldCoords(entity, t.x, t.y, t.z)
     else
         local axis

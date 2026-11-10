@@ -267,8 +267,12 @@ local function buildTarget(entity, coords, playerCoords, zones, point)
     if not entity and #zones == 0 and not point then return nil end
 
     local target = { zones = zones, point = point, entries = {}, coords = coords, distance = #(coords - playerCoords) }
-    if point then target.anchor = point.coords
-    elseif not entity then target.anchor = zoneCentre(zones[1], playerCoords) end
+    if point then
+        target.anchor = point.coords
+        target.facing = EFT.Points.forward(point.entries[1], point.entity, point.model)
+    elseif not entity then
+        target.anchor = zoneCentre(zones[1], playerCoords)
+    end
     target.holder = point and point.entity or entity
     local entityType, model, netId, isPlayer = Scan.classify(entity)
     if entityType then

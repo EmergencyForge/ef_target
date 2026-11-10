@@ -58,7 +58,7 @@ local function showMenu(point)
     local option = point.option
     if shown == point.key and shownOption == option then return end
     shown, shownOption = point.key, option
-    EFT.Surface.place(point.coords, point.entity)
+    EFT.Surface.place(point.coords, point.entity, EFT.Points.forward(point.entries and point.entries[1], point.entity, point.model))
     EFT.Nui.show({ { id = 'near', label = option.label, icon = option.icon, iconColor = option.iconColor } }, 1)
 end
 

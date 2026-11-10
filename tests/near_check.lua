@@ -131,6 +131,7 @@ stub({
 
     GetEntityBoneIndexByName = function(_, name) return boneIds[name] or -1 end,
     GetEntityBonePosition_2 = function(entity, id) return world[entity].coords + boneById[id] end,
+    GetEntityBoneRotation = function() return vec3(0, 0, 0) end,
     GetModelDimensions = function() return vec3(-1, -2, 0), vec3(1, 2, 2) end,
     GetOffsetFromEntityInWorldCoords = function(entity, x, y, z) return world[entity].coords + vec3(x, y, z) end,
 

@@ -104,6 +104,11 @@ entities[7].coords = vec3(0, 0, 0)
 entities[7].forward = vec3(1, 0, 0)
 S.place(vec3(1, -1, 0.5), 7)
 check('a fixed point keeps its place and takes the side of its entity', same(centre(frame()), 1, -1.1, 0.5))
+-- An opened door: the bone faces 60 degrees off the car, the menu lies on the door
+S.place(vec3(1, -1, 0.5), 7, vec3(-0.866, 0.5, 0))
+local onDoor = frame()
+local doorRight = onDoor[1][2] - onDoor[1][1]
+check('a point on an opened door lines up with the door, not the car', near(doorRight.x * 0.5 + doorRight.y * 0.866, 0) and doorRight.y < -0.1)
 entities[8].forward = vec3(0.5, 0.866, 0)
 S.place(nil, 8)
 local onPed = frame()

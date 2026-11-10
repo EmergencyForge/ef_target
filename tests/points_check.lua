@@ -15,6 +15,8 @@ stub('GetEntityBoneIndexByName', function(_, name)
 end)
 stub('DoesEntityExist', function() return entityExists end)
 stub('GetEntityBonePosition_2', function() return boneAt end)
+local boneHeading = 90.0
+stub('GetEntityBoneRotation', function() return vec3(0, 0, boneHeading) end)
 stub('GetEntityModel', function() return 77 end)
 stub('GetModelDimensions', function() return vec3(-1, -2, 0), vec3(1, 2, 2) end)
 stub('GetOffsetFromEntityInWorldCoords', function(_, x, y, z) return vec3(x + 100, y, z) end)
@@ -37,6 +39,11 @@ local function entry(bone, option, source)
 end
 
 check('a missing bone gives no point', P.resolve({ anchor = { bone = 'missing' } }, 5) == nil)
+local doorFacing = P.forward({ anchor = { bone = 'door' } }, 5)
+check('a bone point faces the way its bone turns', math.abs(doorFacing.x + 1) < 0.001 and math.abs(doorFacing.y) < 0.001)
+check('offsets and coords go by their entity', P.forward({ anchor = { offset = vec3(0, 0, 0) } }, 5) == nil
+    and P.forward({ anchor = { coords = vec3(0, 0, 0) } }, nil) == nil)
+check('a missing bone gives no facing', P.forward({ anchor = { bone = 'missing' } }, 5) == nil)
 check('a bone resolves to its position', P.resolve({ anchor = { bone = 'door' } }, 5) == boneAt)
 check('a relative offset scales by the model size',
     P.resolve({ anchor = { offset = vec3(0.5, 0.5, 0.5), relative = true } }, 5) == vec3(100, 0, 1))
