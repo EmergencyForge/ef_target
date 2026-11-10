@@ -10,11 +10,11 @@ local METRES_PER_PIXEL = 0.0018
 local REFERENCE, MIN_SIZE, MAX_SIZE = 2.5, 0.6, 1.6
 -- Floors, tables and roofs would lay the text flat: steeper normals do not count as a surface
 local STEEP = 0.7
--- Below this the surface is seen so much from the side that the text would be squashed, about 60 degrees
-local GRAZING = 0.5
--- Pulls the surface towards the camera so curved bodywork and the bulk of a ped do not cover it.
--- Along the line of sight the point stays where it is on screen.
-local LIFT = 0.15
+-- Below this the surface is seen so much from the side that the text would be unreadable
+local GRAZING = 0.3
+-- Lifts the surface off what it lies on. Curved bodywork and the bulk of a ped need the room,
+-- pulling towards the camera instead makes the menu slide over the object as the player moves.
+local LIFT = 0.10
 -- How long the page keeps being drawn after hide, long enough for its fade and the press of a confirm
 local FADE_MS = 450
 
@@ -43,10 +43,11 @@ function Surface.quad(centre, face, right, scale)
     local Nui = EFT.Nui
     local w = Nui.WIDTH / 2 * METRES_PER_PIXEL * scale * Config.MenuScale
     local h = w * Nui.HEIGHT / Nui.WIDTH
-    local bl = centre - right * w - UP * h
-    local br = centre + right * w - UP * h
-    local tr = centre + right * w + UP * h
-    local tl = centre - right * w + UP * h
+    local c = centre + face * LIFT
+    local bl = c - right * w - UP * h
+    local br = c + right * w - UP * h
+    local tr = c + right * w + UP * h
+    local tl = c - right * w + UP * h
     return {
         { bl, br, tr, { 0.0, 1.0 }, { 1.0, 1.0 }, { 1.0, 0.0 } },
         { bl, tr, tl, { 0.0, 1.0 }, { 1.0, 0.0 }, { 0.0, 0.0 } },
@@ -85,9 +86,6 @@ end
 
 local function draw()
     local anchor, face = current()
-    local toCamera = GetFinalRenderedCamCoord() - anchor
-    local distance = #toCamera
-    if distance > 0.0001 then anchor = anchor + toCamera * (math.min(LIFT, distance / 2) / distance) end
     for _, tri in ipairs(Surface.quad(anchor, face, vec3(-face.y, face.x, 0.0), placed.scale)) do
         local a, b, c = tri[1], tri[2], tri[3]
         DrawSpritePoly(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, 255, 255, 255, 255, EFT.Nui.TXD, EFT.Nui.TEXTURE,

@@ -50,7 +50,7 @@
 <script>
 // Units: 1 m = 100 px, y points down, floor at y = 0, camera looks along -z at yaw 0
 // Same numbers as client/surface.lua and client/nui.lua
-var METRES_PER_PIXEL = 0.0018, REFERENCE = 250, MIN_SIZE = 0.6, MAX_SIZE = 1.6, GRAZING = 0.5
+var METRES_PER_PIXEL = 0.0018, REFERENCE = 250, MIN_SIZE = 0.6, MAX_SIZE = 1.6, GRAZING = 0.3
 var PAGE_W = 1024, PAGE_H = 512
 var TARGETS = [
   { id: 'door', p: [-244, -100, -480], title: 'Haustür', icon: 'fa-solid fa-door-closed',
@@ -169,7 +169,7 @@ function place(t) {
   if (len > 0 && (Math.sin(surface.yaw) * dx + Math.cos(surface.yaw) * dz) / len >= GRAZING) { yaw = surface.yaw; p = surface.p }
   var dist = Math.hypot(dx, cam.y - t.p[1], dz)
   var k = Math.max(MIN_SIZE, Math.min(MAX_SIZE, dist / REFERENCE))
-  placed = { p: p, yaw: yaw, out: 15, scale: METRES_PER_PIXEL * 100 * k }
+  placed = { p: p, yaw: yaw, out: 10, scale: METRES_PER_PIXEL * 100 * k }
 }
 
 function open(t) {
