@@ -38,6 +38,8 @@ local function frame()
     pump()
     return tris
 end
+-- bl and tr of the first triangle are opposite corners
+local function centre(drawn) return (drawn[1][1] + drawn[1][3]) * 0.5 end
 
 -- Orientation
 local origin = vec3(0, 0, 0)
@@ -47,6 +49,10 @@ face = S.orient(origin, vec3(0.5, -0.866, 0), camera)
 check('a wall facing the player carries the menu', same(face, 0.5, -0.866, 0))
 face = S.orient(origin, vec3(1, 0, 0), camera)
 check('a wall seen from the side falls back to the player', same(face, 0, -1, 0))
+face = S.orient(origin, vec3(0.8, -0.6, 0), camera)
+check('a wall at about 53 degrees still carries the menu', same(face, 0.8, -0.6, 0))
+face = S.orient(origin, vec3(0.9, -0.436, 0), camera)
+check('a wall past 60 degrees squashes the text, the menu turns to the player', same(face, 0, -1, 0))
 face = S.orient(origin, vec3(0, -0.3, 0.95), camera)
 check('a floor or table top does not lay the text flat', same(face, 0, -1, 0))
 face = S.orient(origin, vec3(0, -0.6, 0.6), camera)
@@ -65,16 +71,22 @@ local tl, br = quad[2][3], quad[1][2]
 check('the top left corner carries UV 0,0', tl.x < 0 and tl.z > 0 and quad[2][6][1] == 0.0 and quad[2][6][2] == 0.0)
 check('the bottom right corner carries UV 1,1', br.x > 0 and br.z < 0 and quad[1][5][1] == 1.0 and quad[1][5][2] == 1.0)
 check('the page keeps its aspect ratio', near((br.x - tl.x) / (tl.z - br.z), 2.0))
-check('the surface sits off what it lies on', near(tl.y, -0.04))
-check('one page pixel is 2.3 mm at full size', near(br.x - tl.x, 1024 * 0.0023))
+check('the page is centred on its anchor', near(tl.y, 0) and near(tl.x + br.x, 0))
+check('one page pixel is 1.8 mm at full size', near(br.x - tl.x, 1024 * 0.0018))
 
 -- Placing and drawing
 S.place(vec3(0, 0, 0), vec3(1, 0, 0), 7)
 S.visible(true)
-check('a shown menu is drawn as two triangles', #frame() == 2)
+local shown = frame()
+check('a shown menu is drawn as two triangles', #shown == 2)
+check('the menu stands 15 cm towards the camera', near(shown[1][1].y, -0.15))
+camera = vec3(3, 0, 0)
+local turned = frame()
+check('the pull follows the camera, the menu keeps its own facing', same(centre(turned), 0.15, 0, 0) and near(turned[1][1].y, turned[1][2].y))
+camera = vec3(0, -3, 0)
 entities[7].coords = vec3(2, 0, 0)
 local moved = frame()
-check('the menu follows a moving vehicle', near((moved[1][1].x + moved[1][2].x) / 2, 2.0))
+check('the menu follows a moving vehicle', near(centre(moved).x, 2.0 - 0.15 * 2 / math.sqrt(13)))
 S.place(vec3(0, 0, 0), vec3(0, -1, 0), 8)
 entities[8].coords = vec3(0, 0, 0)
 local onPed = frame()

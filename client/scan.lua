@@ -208,6 +208,13 @@ local function updatePoints(entity, playerCoords, now)
     return collected
 end
 
+-- The centre of a zone without height limits says nothing about how far up the player stands
+local function zoneCentre(zone, playerCoords)
+    local center = zone.center
+    if zone.openHeight then return vec3(center.x, center.y, playerCoords.z) end
+    return center
+end
+
 -- What gets drawn, which is also all that can be snapped to
 local function drawList(checked, playerCoords)
     local menu = EFT.Session.menu()
@@ -216,9 +223,7 @@ local function drawList(checked, playerCoords)
         if point.visible and point.clear then list[#list + 1] = point end
     end
     for _, zone in ipairs(EFT.Registry.zoneGrid:near(playerCoords, Config.RayLength)) do
-        local center = zone.center
-        -- The centre of a zone without height limits says nothing about how far up the player stands
-        if zone.openHeight then center = vec3(center.x, center.y, playerCoords.z) end
+        local center = zoneCentre(zone, playerCoords)
         local distance = #(center - playerCoords)
         if zone.drawSprite ~= false and anyStatic(zone.options, distance, menu) then
             list[#list + 1] = { key = 'zone:' .. zone.id, coords = center, distance = distance, noSnap = true, visible = true }
@@ -263,7 +268,10 @@ local function buildTarget(entity, coords, normal, playerCoords, zones, point)
     if not entity and #zones == 0 and not point then return nil end
 
     local target = { zones = zones, point = point, entries = {}, coords = coords, distance = #(coords - playerCoords) }
-    target.anchor = point and point.coords or coords
+    -- A ray inside a zone can end anywhere in it, behind a glass door on the floor: the menu hangs at its marker
+    if point then target.anchor = point.coords
+    elseif entity then target.anchor = coords
+    else target.anchor = zoneCentre(zones[1], playerCoords) end
     target.holder = point and point.entity or entity
     if hit and normal and #(hit - target.anchor) <= NORMAL_REACH then target.normal = normal end
     local entityType, model, netId, isPlayer = Scan.classify(entity)

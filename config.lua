@@ -6,7 +6,7 @@ Config = {
         Thickness = 2.0,     -- line width of the own marker in pixels at 1080p, 1.0 to 3.5
         CenterDot = false,   -- dot in the middle of the own marker
     },
-    MenuScale = 1.0,         -- size of the menu in the world, 1.0 is about 12 cm per key at 2.5 m
+    MenuScale = 1.0,         -- size of the menu in the world, 1.0 is about 9 cm per key at 2.5 m
     SnapRadius = 0.035,     -- share of screen height within which the cursor snaps to a point
     MaxPoints = 24,          -- points shown at once
     DefaultPoints = true,    -- built-in points for vehicles

@@ -595,6 +595,11 @@ press()
 scans(2)
 check('an open height zone has its marker in horizontal reach', #drawn == 1 and drawn[1].noSnap)
 check('an open height marker stands at the player height', drawn[1].coords.z == world[ped].coords.z)
+ray(511, 0, vec3(-1.5, 0.5, 3))
+rays[26] = nil
+scans(2)
+check('a zone menu hangs at its marker, not where the ray ends', placedAt == vec3(-1, 0, world[ped].coords.z) and placedOn == nil)
+rays[511] = nil
 world[ped].coords = vec3(-15, 0, 0)
 scans(2)
 check('an open height zone still ends at its horizontal reach', #drawn == 0)
