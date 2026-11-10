@@ -12,6 +12,7 @@ natives.GetGameTimer = function() return clock end
 natives.CreateThread = function(fn) threads[#threads + 1] = coroutine.create(fn) end
 natives.Wait = function() coroutine.yield() end
 natives.GetEntityType = function(entity) return entities[entity].type end
+natives.GetEntityForwardVector = function(entity) return entities[entity].forward or vec3(0, 1, 0) end
 natives.DoesEntityExist = function(entity) return entities[entity] ~= nil end
 natives.GetOffsetFromEntityGivenWorldCoords = function(entity, x, y, z) return vec3(x, y, z) - entities[entity].coords end
 natives.GetOffsetFromEntityInWorldCoords = function(entity, x, y, z) return entities[entity].coords + vec3(x, y, z) end
@@ -52,7 +53,16 @@ check('a wall seen from the side falls back to the player', same(face, 0, -1, 0)
 face = S.orient(origin, vec3(0.8, -0.6, 0), camera)
 check('a wall at about 53 degrees still carries the menu', same(face, 0.8, -0.6, 0))
 face = S.orient(origin, vec3(0.966, -0.259, 0), camera)
-check('a wall past 75 degrees turns the menu to the player', same(face, 0, -1, 0))
+check('a wall past 75 degrees with nothing else to go by turns the menu to the player', same(face, 0, -1, 0))
+local turned30 = vec3(0.5, 0.866, 0)
+face = S.orient(origin, nil, camera, turned30)
+check('without a surface an entity lends the side that faces the player', same(face, -0.5, -0.866, 0))
+face = S.orient(origin, vec3(0.966, -0.259, 0), camera, turned30)
+check('a grazing surface falls back to the side of the entity', same(face, -0.5, -0.866, 0))
+face = S.orient(origin, nil, camera, vec3(1, 0, 0))
+check('an entity seen from its flank lends its flank', same(face, 0, -1, 0))
+face = S.orient(origin, vec3(0, -0.3, 0.95), camera, vec3(0.8, 0.6, 0))
+check('on a roof the menu still lines up with the entity', same(face, 0.6, -0.8, 0))
 face = S.orient(origin, vec3(0, -0.3, 0.95), camera)
 check('a floor or table top does not lay the text flat', same(face, 0, -1, 0))
 face = S.orient(origin, vec3(0, -0.6, 0.6), camera)
@@ -85,10 +95,15 @@ camera = vec3(0, -3, 0)
 entities[7].coords = vec3(2, 0, 0)
 local moved = frame()
 check('the menu follows a moving vehicle', same(centre(moved), 2.0, -0.10, 0))
+entities[8].forward = vec3(0.5, 0.866, 0)
 S.place(vec3(0, 0, 0), vec3(0, -1, 0), 8)
 entities[8].coords = vec3(0, 0, 0)
 local onPed = frame()
-check('a ped never lends its surface, the menu still faces the player', near(onPed[1][1].y, onPed[1][3].y))
+local pedRight = onPed[1][2] - onPed[1][1]
+check('a ped lends the side of its body, not its surface', near(pedRight.x * 0.5 + pedRight.y * 0.866, 0) and pedRight.x > 0)
+entities[8].forward = vec3(0, -1, 0)
+local stillPed = frame()
+check('a ped turning keeps the facing it had', near(stillPed[1][1].x, onPed[1][1].x) and near(stillPed[1][1].y, onPed[1][1].y))
 S.place(vec3(0, 0, 0), nil, nil)
 camera = vec3(0, -10, 0)
 S.place(vec3(0, 0, 0), nil, nil)
@@ -102,7 +117,7 @@ check('a hidden menu stays for its fade', #frame() == 2)
 clock = clock + 500
 check('after the fade nothing is drawn', #frame() == 0 and #threads == 0)
 
-for _, name in ipairs({ 'Config', 'GetFinalRenderedCamCoord', 'GetGameTimer', 'CreateThread', 'Wait', 'GetEntityType',
+for _, name in ipairs({ 'Config', 'GetFinalRenderedCamCoord', 'GetGameTimer', 'CreateThread', 'Wait', 'GetEntityType', 'GetEntityForwardVector',
     'DoesEntityExist', 'GetOffsetFromEntityGivenWorldCoords', 'GetOffsetFromEntityInWorldCoords', 'DrawSpritePoly' }) do
     _G[name] = nil
 end

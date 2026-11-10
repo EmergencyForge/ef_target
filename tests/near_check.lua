@@ -117,6 +117,7 @@ stub({
         return world[entity] and world[entity].type or 0
     end,
     GetEntityModel = function(entity) return world[entity].model end,
+    GetEntityForwardVector = function() return vec3(0, 1, 0) end,
     IsModelAVehicle = function(model) return model == 77 end,
     IsPedAPlayer = function(entity) return world[entity].player or false end,
     NetworkGetEntityIsNetworked = function(entity) return networked and world[entity].netId ~= nil end,

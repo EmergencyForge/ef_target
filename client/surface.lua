@@ -1,5 +1,6 @@
--- Draws the menu page as an upright surface in the world. It lies on the surface under the crosshair
--- when that faces the player well enough, otherwise it turns to the player once when placed.
+-- Draws the menu page as an upright surface in the world, lined up with the object it belongs to:
+-- on the surface under the crosshair when that faces the player well enough, otherwise on the side of
+-- the entity that faces the player. Only without an entity, at a zone or a free point, it turns to the player.
 local Surface = {}
 EFT.Surface = Surface
 
@@ -27,12 +28,23 @@ local function flat(v)
     return vec3(v.x / length, v.y / length, 0.0)
 end
 
--- face points from the surface towards the viewer, right is the viewer's right on it
-function Surface.orient(anchor, normal, camera)
-    local face = flat(camera - anchor) or vec3(0.0, -1.0, 0.0)
-    if normal and math.abs(normal.z) < STEEP then
-        local onSurface = flat(normal)
-        if onSurface and onSurface.x * face.x + onSurface.y * face.y >= GRAZING then face = onSurface end
+-- face points from the surface towards the viewer, right is the viewer's right on it.
+-- forward is the entity's forward vector: its four sides are the fallback when the surface does not carry the menu.
+function Surface.orient(anchor, normal, camera, forward)
+    local toCamera = flat(camera - anchor) or vec3(0.0, -1.0, 0.0)
+    local face = toCamera
+    local onSurface = normal and math.abs(normal.z) < STEEP and flat(normal)
+    if onSurface and onSurface.x * toCamera.x + onSurface.y * toCamera.y >= GRAZING then
+        face = onSurface
+    else
+        local f = forward and flat(forward)
+        if f then
+            local best = -2.0
+            for _, side in ipairs({ f, f * -1.0, vec3(-f.y, f.x, 0.0), vec3(f.y, -f.x, 0.0) }) do
+                local facing = side.x * toCamera.x + side.y * toCamera.y
+                if facing > best then best, face = facing, side end
+            end
+        end
     end
     return face, vec3(-face.y, face.x, 0.0)
 end
@@ -54,12 +66,14 @@ function Surface.quad(centre, face, right, scale)
     }
 end
 
--- Peds keep their turn to the player: a ped turning away would take the text with it
+-- A ped's body gives no usable surface, and a ped turning away would take the text with it:
+-- it gets the side of its body that faces the player and keeps that facing.
 function Surface.place(anchor, normal, entity)
     if not anchor then return end
     local camera = GetFinalRenderedCamCoord()
-    local isPed = entity and entity ~= 0 and GetEntityType(entity) == 1
-    local face = Surface.orient(anchor, not isPed and normal or nil, camera)
+    local hasEntity = entity and entity ~= 0
+    local isPed = hasEntity and GetEntityType(entity) == 1
+    local face = Surface.orient(anchor, not isPed and normal or nil, camera, hasEntity and GetEntityForwardVector(entity) or nil)
     local distance = #(camera - anchor)
     local scale = math.max(MIN_SIZE, math.min(MAX_SIZE, distance / REFERENCE))
     placed = { anchor = anchor, face = face, scale = scale }
